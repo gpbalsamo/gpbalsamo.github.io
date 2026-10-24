@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>AGU26 · San Francisco</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f5f1; --surface: #ffffff; --text: #1d1f21; --muted: #6b6f75;
+    --line: #e3e1da; --accent: #0b6e8a; --accent-soft: #e2f0f4;
+    --warn: #9a5b00; --warn-soft: #fbf0dc; --ok: #2e7d4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141618; --surface: #1c1f22; --text: #e8e6e1; --muted: #9a9ea4;
+      --line: #2c3034; --accent: #5fb6cf; --accent-soft: #1d3138;
+      --warn: #e0a64a; --warn-soft: #33281a; --ok: #6cc28f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 Inter, system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 28px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .status { margin-top: 14px; font-size: 14px; color: var(--accent); font-weight: 500; }
+  .summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden; margin: 24px 0 8px;
+  }
+  .summary div { background: var(--surface); padding: 12px 14px; }
+  .summary span { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .summary strong { font-weight: 500; }
+  section { margin-top: 36px; }
+  h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+  }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card + .card { margin-top: 10px; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; margin: 0; }
+  .kv dt { color: var(--muted); font-size: 13px; }
+  .kv dd { margin: 0; }
+  .ptitle { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+  ul.notes { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 0 10px 8px 0; }
+  td { padding: 10px 10px 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .tablewrap { overflow-x: auto; }
+  .day { display: grid; grid-template-columns: 110px 1fr; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .day:first-child { border-top: 0; }
+  .day .d { font-weight: 600; }
+  .day .d small { display: block; font-weight: 400; color: var(--muted); }
+  .day.today { background: var(--accent-soft); margin: 0 -18px; padding: 12px 18px; }
+  .item { display: flex; gap: 10px; }
+  .item + .item { margin-top: 4px; }
+  .item .t { min-width: 96px; color: var(--muted); font-size: 13px; padding-top: 1px; }
+  .item.hl { font-weight: 600; color: var(--accent); }
+  .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); font-weight: 500; }
+  .badge.ok { background: var(--accent-soft); color: var(--ok); }
+  .todo { list-style: none; margin: 0; padding: 0; }
+  .todo li { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .todo li:first-child { border-top: 0; }
+  .todo .box { width: 16px; height: 16px; border: 1.5px solid var(--muted); border-radius: 4px; flex: none; margin-top: 3px; }
+  .todo li.done .box { background: var(--ok); border-color: var(--ok); }
+  .todo li.done .txt { text-decoration: line-through; color: var(--muted); }
+  .todo .due { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .todo li.overdue .due { color: var(--warn); font-weight: 500; }
+  a { color: var(--accent); }
+  .links a { display: inline-block; margin: 0 16px 6px 0; }
+  footer { margin-top: 48px; font-size: 12px; color: var(--muted); }
+  .err { color: var(--warn); }
+  @media (max-width: 560px) {
+    .kv { grid-template-columns: 1fr; gap: 0; }
+    .kv dd { margin-bottom: 8px; }
+    .day { grid-template-columns: 1fr; gap: 4px; }
+    .item .t { min-width: 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">AGU26 · San Francisco</h1>
+    <p id="subtitle"></p>
+    <div class="status" id="status"></div>
+  </header>
+
+  <div class="summary" id="summary"></div>
+
+  <section><h2>My presentation</h2><div id="presentation"></div></section>
+  <section><h2>Day by day</h2><div class="card" id="days"></div></section>
+  <section><h2>Flights</h2><div class="card tablewrap" id="flights"></div></section>
+  <section><h2>Accommodation</h2><div id="accommodation"></div></section>
+  <section id="meetings-sec"><h2>Meetings</h2><div id="meetings"></div></section>
+  <section><h2>To do</h2><div class="card"><ul class="todo" id="todo"></ul></div></section>
+  <section id="notes-sec"><h2>Notes</h2><div class="card" id="notes"></div></section>
+  <section><h2>Links</h2><div class="links" id="links"></div></section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const parse = (iso) => { const [y,m,d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m-1, d)); };
+  const fmt = (iso) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return esc(iso); const d = parse(iso); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+
+  fetch("data.json", { cache: "no-store" })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(e => { $("status").innerHTML = `<span class="err">Could not load data.json (${esc(e.message)}).</span>`; });
+
+  function render(D) {
+    const tz = D.meta.timezone || "America/Los_Angeles";
+    const todayLA = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+
+    document.title = D.meta.title;
+    $("title").textContent = D.meta.title;
+    $("subtitle").textContent = D.meta.subtitle;
+
+    // Status line
+    const dep = D.flights[0]?.date, ret = D.flights[D.flights.length - 1]?.date;
+    if (dep) {
+      const days = Math.round((parse(dep) - parse(todayLA)) / 864e5);
+      $("status").textContent =
+        days > 1 ? `Departure in ${days} days (${fmt(dep)})` :
+        days === 1 ? "Departure tomorrow" :
+        days === 0 ? "Travel day" :
+        (ret && todayLA <= ret) ? `In San Francisco — today is ${fmt(todayLA)}` : "Trip completed";
+    }
+
+    $("summary").innerHTML = D.summary.map(s => `<div><span>${esc(s.label)}</span><strong>${esc(s.value)}</strong></div>`).join("");
+
+    const P = D.presentation;
+    $("presentation").innerHTML = `<div class="card">
+      <p class="ptitle">${esc(P.title)}</p>
+      <dl class="kv">
+        <dt>When</dt><dd><strong>${fmt(P.date)}, ${esc(P.time)}</strong></dd>
+        <dt>Where</dt><dd>${esc(P.location)}</dd>
+        <dt>Board</dt><dd>${esc(P.board)}</dd>
+        <dt>Type</dt><dd>${esc(P.type)}</dd>
+        <dt>Session</dt><dd>${esc(P.session)}</dd>
+        <dt>Abstract ID</dt><dd class="mono">${esc(P.abstract_id)}</dd>
+        <dt>Conveners</dt><dd>${esc(P.conveners)}</dd>
+      </dl>
+      ${P.notes?.length ? `<ul class="notes">${P.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+    </div>`;
+
+    $("days").innerHTML = D.days.map(d => `<div class="day${d.date === todayLA ? " today" : ""}">
+      <div class="d">${fmt(d.date)}${d.date === todayLA ? "<small>today</small>" : ""}</div>
+      <div>${d.items.map(i => `<div class="item${i.highlight ? " hl" : ""}"><span class="t">${esc(i.time)}</span><span>${esc(i.text)}</span></div>`).join("")}</div>
+    </div>`).join("");
+
+    $("flights").innerHTML = `<table><thead><tr><th>Date</th><th>Flight</th><th>From</th><th>To</th></tr></thead><tbody>${
+      D.flights.map(f => `<tr>
+        <td>${fmt(f.date)}<div class="sub">${esc(f.leg)}</div></td>
+        <td class="mono">${esc(f.flight)}</td>
+        <td><span class="mono">${esc(f.dep)}</span> ${esc(f.from)}</td>
+        <td><span class="mono">${esc(f.arr)}</span> ${esc(f.to)}${f.notes ? `<div class="sub">${esc(f.notes)}</div>` : ""}</td>
+      </tr>`).join("")
+    }</tbody></table><p class="sub" style="margin:10px 0 0">Times are local to each airport.</p>`;
+
+    const A = D.accommodation;
+    const booked = A.name && !/not booked/i.test(A.status);
+    $("accommodation").innerHTML = `<div class="card">
+      <p style="margin:0 0 10px"><span class="badge${booked ? " ok" : ""}">${esc(A.status)}</span></p>
+      <dl class="kv">
+        ${A.name ? `<dt>Hotel</dt><dd>${esc(A.name)}</dd>` : ""}
+        ${A.address ? `<dt>Address</dt><dd>${esc(A.address)}</dd>` : ""}
+        <dt>Nights</dt><dd>${fmt(A.check_in)} → ${fmt(A.check_out)}</dd>
+      </dl>
+      ${A.notes ? `<p class="sub" style="margin:10px 0 0">${esc(A.notes)}</p>` : ""}
+    </div>`;
+
+    if (D.meetings?.length) {
+      $("meetings").innerHTML = D.meetings.map(m => `<div class="card"><dl class="kv">
+        <dt>With</dt><dd>${esc(m.with)}</dd><dt>When</dt><dd>${esc(m.when)}</dd><dt>Topic</dt><dd>${esc(m.topic)}</dd>
+      </dl></div>`).join("");
+    } else $("meetings-sec").hidden = true;
+
+    $("todo").innerHTML = D.todo.map(t => {
+      const overdue = !t.done && /^\d{4}-\d{2}-\d{2}$/.test(t.due) && t.due < todayLA;
+      return `<li class="${t.done ? "done" : ""}${overdue ? " overdue" : ""}"><span class="box"></span><span class="txt">${esc(t.text)}</span><span class="due">${t.due ? fmt(t.due) : ""}</span></li>`;
+    }).join("");
+
+    if (D.notes?.length) $("notes").innerHTML = D.notes.map(n => `<p style="margin:0 0 8px">${esc(n)}</p>`).join("");
+    else $("notes-sec").hidden = true;
+
+    $("links").innerHTML = D.links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("");
+
+    $("footer").textContent = `Last updated ${D.meta.last_updated} · ${D.meta.updated_by}`;
+  }
+})();
+</script>
+</body>
+</html>

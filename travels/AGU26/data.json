@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "title": "AGU26 · San Francisco",
+    "subtitle": "AGU Fall Meeting 2026 — Gianpaolo Balsamo (ECMWF)",
+    "timezone": "America/Los_Angeles",
+    "last_updated": "2026-10-24",
+    "updated_by": "Claude (initial build from Outlook mail)"
+  },
+
+  "summary": [
+    { "label": "Meeting", "value": "AGU26, 7–11 December 2026" },
+    { "label": "Venue", "value": "Moscone Center, San Francisco" },
+    { "label": "My presentation", "value": "Poster · Mon 7 Dec, 14:15–17:45 PST" },
+    { "label": "In SF", "value": "Sat 5 Dec (evening) – Sat 12 Dec (evening)" }
+  ],
+
+  "presentation": {
+    "type": "Poster (invited in session GC100; scheduled by AGU as poster)",
+    "title": "Perspectives on Integrated Earth System Modeling and Reanalysis at ECMWF",
+    "abstract_id": "2090995",
+    "session": "GC13M — Pioneering Integrated Earth System Modeling and Reanalysis Through Advanced Observation Infusion Across Scales (Poster)",
+    "conveners": "Sujay Kumar (NASA GSFC), with Amal El Akkraoui, Brad Weir, Lesley Ott, Ian Fenty, Paul Stackhouse",
+    "date": "2026-12-07",
+    "time": "14:15–17:45 PST",
+    "location": "Moscone Center, Halls ABC (Poster Hall)",
+    "board": "TBC — assigned by AGU in late November",
+    "notes": [
+      "Maximum poster size 44 in × 44 in (≈112 × 112 cm); board side shared by two presenters.",
+      "Do not hang the poster before Monday; remove it by 18:00 the same day.",
+      "AGU recommends its printing provider (CCI) for correct sizing.",
+      "Optional: interactive digital poster via iPosterSessions (instructions due late October)."
+    ]
+  },
+
+  "flights": [
+    {
+      "leg": "Outbound 1/2",
+      "date": "2026-12-05",
+      "flight": "BA049",
+      "from": "London Heathrow (LHR) T5",
+      "dep": "14:55",
+      "to": "Seattle-Tacoma (SEA)",
+      "arr": "16:50",
+      "notes": "World Traveller, ~9h55"
+    },
+    {
+      "leg": "Outbound 2/2",
+      "date": "2026-12-05",
+      "flight": "AS1386 (BA7544)",
+      "from": "Seattle-Tacoma (SEA)",
+      "dep": "18:40",
+      "to": "San Francisco (SFO) T1",
+      "arr": "20:52",
+      "notes": "Operated by Alaska Airlines; 1h50 connection in Seattle"
+    },
+    {
+      "leg": "Return",
+      "date": "2026-12-12",
+      "flight": "BA286",
+      "from": "San Francisco (SFO) International Terminal",
+      "dep": "20:35",
+      "to": "London Heathrow (LHR) T5",
+      "arr": "15:10 (+1, Sun 13 Dec)",
+      "notes": "World Traveller, ~10h35"
+    }
+  ],
+
+  "accommodation": {
+    "status": "Not booked yet",
+    "name": "",
+    "address": "",
+    "check_in": "2026-12-05",
+    "check_out": "2026-12-12",
+    "notes": "AGU housing: book by 19 November for the best rates."
+  },
+
+  "days": [
+    {
+      "date": "2026-12-05",
+      "items": [
+        { "time": "14:55", "text": "Depart LHR T5 — BA049 to Seattle" },
+        { "time": "18:40", "text": "SEA → SFO — AS1386" },
+        { "time": "20:52", "text": "Arrive SFO T1; transfer to hotel" }
+      ]
+    },
+    {
+      "date": "2026-12-06",
+      "items": [
+        { "time": "", "text": "Arrival day / jet lag. Collect badge at Moscone if registration is open." }
+      ]
+    },
+    {
+      "date": "2026-12-07",
+      "items": [
+        { "time": "morning", "text": "Hang poster in Halls ABC (not before today)" },
+        { "time": "14:15–17:45", "text": "Poster session GC13M — abstract 2090995", "highlight": true },
+        { "time": "by 18:00", "text": "Remove poster" }
+      ]
+    },
+    { "date": "2026-12-08", "items": [ { "time": "", "text": "Sessions — to plan" } ] },
+    { "date": "2026-12-09", "items": [ { "time": "", "text": "Sessions — to plan" } ] },
+    { "date": "2026-12-10", "items": [ { "time": "", "text": "Sessions — to plan" } ] },
+    { "date": "2026-12-11", "items": [ { "time": "", "text": "Last day of AGU26 (poster hall closes 13:00)" } ] },
+    {
+      "date": "2026-12-12",
+      "items": [
+        { "time": "", "text": "Check out" },
+        { "time": "20:35", "text": "Depart SFO — BA286 to London" }
+      ]
+    },
+    {
+      "date": "2026-12-13",
+      "items": [ { "time": "15:10", "text": "Arrive LHR T5 (UK time)" } ]
+    }
+  ],
+
+  "meetings": [
+    {
+      "with": "Sujay Kumar (NASA GSFC, session convener)",
+      "when": "TBC",
+      "topic": "Possible collaborative project — land modelling, DA or AI, ideally a US regional domain"
+    }
+  ],
+
+  "todo": [
+    { "due": "2026-11-05", "text": "Accept the presentation and confirm in-person attendance in the AGU Speaker Center", "done": false },
+    { "due": "2026-11-05", "text": "Register for AGU26 (early-rate deadline)", "done": false },
+    { "due": "2026-11-19", "text": "Book hotel (AGU housing deadline for best rates)", "done": false },
+    { "due": "", "text": "Attach the supplementary mission request form to the ECMWF travel request (Copernicus budget)", "done": false },
+    { "due": "", "text": "Select a seat for the return flight BA286", "done": false },
+    { "due": "", "text": "Check US entry requirements (ESTA) and passport validity", "done": false },
+    { "due": "", "text": "Design and print poster (44 × 44 in max)", "done": false },
+    { "due": "late Nov", "text": "Note poster board number when AGU sends it", "done": false },
+    { "due": "2026-12-04", "text": "Online check-in (24 h before departure)", "done": false },
+    { "due": "", "text": "Schedule meeting with Sujay Kumar", "done": false }
+  ],
+
+  "links": [
+    { "label": "AGU26 meeting site", "url": "https://www.agu.org/annual-meeting" },
+    { "label": "Moscone Center", "url": "https://www.moscone.com/" },
+    { "label": "US ESTA (official)", "url": "https://esta.cbp.dhs.gov/" }
+  ],
+
+  "notes": []
+}
