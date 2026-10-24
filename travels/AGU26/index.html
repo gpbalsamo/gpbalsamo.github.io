@@ -211,7 +211,7 @@
       <dl class="kv">
         <dt>When</dt><dd><strong>${fmt(P.date)}, ${esc(P.time)}</strong></dd>
         <dt>Where</dt><dd>${esc(P.location)}</dd>
-        <dt>Board</dt><dd>${esc(P.board)}</dd>
+        ${P.board ? `<dt>Board</dt><dd>${esc(P.board)}</dd>` : ""}
         <dt>Type</dt><dd>${esc(P.type)}</dd>
         <dt>Session</dt><dd>${esc(P.session)}</dd>
         <dt>Abstract ID</dt><dd class="mono">${esc(P.abstract_id)}</dd>
