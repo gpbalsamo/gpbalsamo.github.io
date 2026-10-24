@@ -78,6 +78,21 @@
   .links a { display: inline-block; margin: 0 16px 6px 0; }
   footer { margin-top: 48px; font-size: 12px; color: var(--muted); }
   .err { color: var(--warn); }
+  .lock { max-width: 340px; margin: 12vh auto 0; text-align: center; }
+  .lock h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .lock p { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+  .lock form { display: flex; gap: 8px; }
+  .lock input {
+    flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px 12px; letter-spacing: .15em;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+  }
+  .lock button {
+    font: inherit; font-weight: 500; padding: 10px 16px; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  .lock button:disabled { opacity: .6; cursor: default; }
+  .lock .err { margin-top: 12px; font-size: 14px; min-height: 20px; }
+  #content[hidden] { display: none; }
   @media (max-width: 560px) {
     .kv { grid-template-columns: 1fr; gap: 0; }
     .kv dd { margin-bottom: 8px; }
@@ -87,7 +102,17 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="lock" id="lock">
+  <h1>AGU26 · San Francisco</h1>
+  <p>This page is private. Enter the access code.</p>
+  <form id="lockform" autocomplete="off">
+    <input id="code" type="password" inputmode="numeric" aria-label="Access code" placeholder="Access code" autofocus>
+    <button id="unlock" type="submit">Open</button>
+  </form>
+  <div class="err" id="lockerr"></div>
+</div>
+
+<div class="wrap" id="content" hidden>
   <header>
     <h1 id="title">AGU26 · San Francisco</h1>
     <p id="subtitle"></p>
@@ -117,10 +142,47 @@
   const parse = (iso) => { const [y,m,d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m-1, d)); };
   const fmt = (iso) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return esc(iso); const d = parse(iso); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
 
-  fetch("data.json", { cache: "no-store" })
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(render)
-    .catch(e => { $("status").innerHTML = `<span class="err">Could not load data.json (${esc(e.message)}).</span>`; });
+  // Content is in data.enc.json (AES-256-GCM, key from PBKDF2-SHA256 of the access code).
+  // See crypt.py and CLAUDE.md for how to update it.
+  const b64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  let encPromise = null;
+  const getEnc = () => encPromise ??= fetch("data.enc.json", { cache: "no-store" })
+    .then(r => { if (!r.ok) throw new Error("data unavailable (" + r.status + ")"); return r.json(); });
+
+  async function decrypt(code) {
+    const E = await getEnc();
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(code), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", hash: "SHA-256", salt: b64(E.salt), iterations: E.iter },
+      base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(E.iv) }, key, b64(E.ct));
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+
+  async function unlock(code, remembered) {
+    const btn = $("unlock");
+    btn.disabled = true; $("lockerr").textContent = remembered ? "" : "Checking…";
+    try {
+      const D = await decrypt(code);
+      try { sessionStorage.setItem("agu26code", code); } catch (_) {}
+      $("lock").hidden = true; $("content").hidden = false;
+      render(D);
+    } catch (e) {
+      try { sessionStorage.removeItem("agu26code"); } catch (_) {}
+      $("lockerr").textContent = e instanceof DOMException ? (remembered ? "" : "Wrong code.") : "Could not load the page data.";
+      btn.disabled = false; $("code").select();
+    }
+  }
+
+  $("lockform").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const code = $("code").value.trim();
+    if (code) unlock(code, false);
+  });
+
+  let saved = null;
+  try { saved = sessionStorage.getItem("agu26code"); } catch (_) {}
+  if (saved) unlock(saved, true);
 
   function render(D) {
     const tz = D.meta.timezone || "America/Los_Angeles";
