@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing with FIAB</title>
+<meta name="description" content="Regional AI weather and land experiments run with ECMWF's Forecast-in-a-Box: New Zealand, Italy, Norway and California.">
+<style>
+  :root { --bg: #0b1216; --panel: #121c22; --line: #23323b; --ink: #e6edf1; --muted: #93a4ae; --accent: #6cd3ea; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 16px 56px; }
+  h1 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 18px; max-width: 760px; margin: 0 0 20px; }
+  a { color: var(--accent); }
+  .about { max-width: 760px; margin: 0 0 12px; }
+  .about p { margin: 0 0 12px; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 36px; }
+  .btn { display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); text-decoration: none; font-size: 15px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn b { color: var(--accent); font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; color: var(--ink); text-decoration: none; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card img { width: 100%; aspect-ratio: 16 / 7; object-fit: cover; display: block; border-bottom: 1px solid var(--line); background: #070c0f; }
+  .card .body { padding: 14px 16px 16px; }
+  .card h3 { margin: 0 0 2px; font-size: 19px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h3 span { font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 0.08em; }
+  .card .when { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  .card p { margin: 0; font-size: 15px; }
+  .tips { color: var(--muted); font-size: 14px; margin: 32px 0 0; max-width: 760px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Playing with FIAB</h1>
+  <p class="lede">Regional AI weather and land experiments run with ECMWF's Forecast-in-a-Box, shown as interactive forecast viewers.</p>
+
+  <div class="about">
+    <p><b>Forecast-in-a-Box (FIAB)</b> is ECMWF's open-source package for running data-driven weather models end to end on a single machine: it fetches initial conditions, runs an Anemoi model such as AIFS or a limited-area model like MET Norway's BRIS, and writes the forecast as GRIB, all from a browser or its REST API.</p>
+    <p>These pages use FIAB as a test bench. Global and limited-area models were run, fine-tuned for new domains, and coupled to the ecLand land surface and CaMa-Flood rivers. Each viewer below compares them with IFS analyses and HRES (or with the reference data used) over one week.</p>
+  </div>
+  <div class="links">
+    <a class="btn" href="https://github.com/ecmwf/forecast-in-a-box"><b>ecmwf/forecast-in-a-box</b> on GitHub</a>
+  </div>
+
+  <h2>Forecast viewers</h2>
+  <div class="grid">
+    <a class="card" href="NZ/">
+      <img src="img/NZ.webp" alt="New Zealand viewer: four panels of 6 h rain over New Zealand" loading="lazy">
+      <div class="body">
+        <h3>New Zealand <span>NZ</span></h3>
+        <p class="when">Week of 17–23 January 2026</p>
+        <p>BRIS translated to New Zealand at 2.5 km, fine-tuned on 2017–25 IFS analyses and driven by HRES or AIFS (an all-AI chain), with the 6′ limited-area models, against IFS analysis and HRES.</p>
+      </div>
+    </a>
+    <a class="card" href="IT/">
+      <img src="img/IT.webp" alt="Italy viewer: CERRA, HRES and the Italy 3 and 6 arcmin models over the Alps" loading="lazy">
+      <div class="body">
+        <h3>Italy <span>IT</span></h3>
+        <p class="when">Week of 25 June – 1 July 2026</p>
+        <p>The Italy 3′ and 6′ limited-area models, trained on CERRA and IFS analyses and rolled out over 2017–25, against CERRA, IFS analysis and HRES, through the Alpine storms of 29 June.</p>
+      </div>
+    </a>
+    <a class="card" href="NO/">
+      <img src="img/NO.webp" alt="Norway viewer: IFS analysis, HRES and BRIS over Scandinavia" loading="lazy">
+      <div class="body">
+        <h3>Norway <span>NO</span></h3>
+        <p class="when">September 2026</p>
+        <p>MET Norway's BRIS 2.5 km model as shipped, run through FIAB from IFS initial conditions, against IFS analysis and HRES.</p>
+      </div>
+    </a>
+    <a class="card" href="CA/">
+      <img src="img/CA.webp" alt="California viewer: ecLand at 10, 5 and 2.5 km during the January 2023 atmospheric rivers" loading="lazy">
+      <div class="body">
+        <h3>California <span>CA</span></h3>
+        <p class="when">Atmospheric rivers of 3–10 January 2023</p>
+        <p>ecLand at 10, 5 and 2.5 km forced by CONUS404-BA: rain, temperature and wind going in, Sierra snowpack and runoff coming out.</p>
+      </div>
+    </a>
+  </div>
+
+  <p class="tips">In the viewers: drag or scroll to move, space to play, the arrow keys step in time; choose the run, the field and up to four side-by-side panels at the top. A WebGL2 browser is needed; a hard refresh picks up new data.</p>
+
+  <footer>IFS data © ECMWF, CC BY 4.0 · BRIS weights: MET Norway · CERRA: Copernicus C3S · CONUS404-BA: NCAR/USGS · Gianpaolo Balsamo, ECMWF</footer>
+</main>
+</body>
+</html>
