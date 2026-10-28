@@ -1,0 +1,864 @@
+<meta charset="utf-8">
+<title>NZ Forecast Compare</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a dark instrument console. Controls band on top, a 1/2/4-panel map stage, a timeline band at the bottom. */
+:root {
+  --bg: #0a1016;          /* console background */
+  --panel: #0f1a23;       /* bands and menus */
+  --line: #223241;        /* hairlines */
+  --fg: #e3ebf1;          /* primary text */
+  --muted: #8a9cab;       /* secondary text */
+  --accent: #5fd0e8;      /* active control, playhead */
+  --font-ui: "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.3 var(--font-ui); overflow: hidden; }
+#app { height: 100%; display: flex; flex-direction: column; }
+.band { background: var(--panel); border-color: var(--line); border-style: solid; border-width: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.band { border-bottom-width: 1px; padding-block: 8px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.brand b { font-weight: 600; font-size: 17px; letter-spacing: .02em; }
+.brand span { color: var(--muted); font-size: 12.5px; }
+.group { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
+.group > label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; margin-right: 6px; }
+.seg { appearance: none; border: 1px solid var(--line); background: transparent; color: var(--fg); font: 500 14px var(--font-ui);
+  padding: 5px 11px; cursor: pointer; }
+.seg:first-of-type { border-radius: 4px 0 0 4px; } .seg:last-of-type { border-radius: 0 4px 4px 0; }
+.seg[aria-pressed="true"] { background: var(--accent); color: #062029; border-color: var(--accent); }
+.seg:focus-visible, select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--fg); cursor: pointer; font-size: 14px; }
+.chk input { accent-color: var(--accent); }
+select { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; font: 500 14px var(--font-ui); padding: 4px 6px; max-width: 100%; }
+#stage { position: relative; flex: 1; min-height: 0; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#panels { position: absolute; inset: 0; display: grid; gap: 2px; touch-action: none; cursor: grab; }
+#panels.dragging { cursor: grabbing; }
+#panels[data-n="1"] { grid-template: 1fr / 1fr; }
+#panels[data-n="2"] { grid-template: 1fr / 1fr 1fr; }
+#panels[data-n="3"] { grid-template: 1fr / 1fr 1fr 1fr; }
+#panels[data-n="4"] { grid-template: 1fr 1fr / 1fr 1fr; }
+@media (max-width: 700px) { #panels[data-n="2"] { grid-template: 1fr 1fr / 1fr; } #panels[data-n="3"] { grid-template: 1fr 1fr 1fr / 1fr; } }
+.pn { position: relative; outline: 1px solid var(--line); min-width: 0; min-height: 0; }
+.pn .hd { position: absolute; top: 6px; left: 6px; right: 6px; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+.pn select { pointer-events: auto; background: rgba(10,16,22,.82); backdrop-filter: blur(4px); font-weight: 600; }
+.pn .ro { font: 12.5px/1.35 var(--font-num); color: var(--fg); background: rgba(10,16,22,.78); border-radius: 4px; padding: 3px 7px;
+  text-align: right; white-space: pre; font-variant-numeric: tabular-nums; }
+.pn .ro:empty { display: none; }
+.pn .msg { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 13px; color: var(--muted);
+  background: rgba(10,16,22,.8); padding: 3px 9px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+.pn .msg:empty { display: none; }
+footer.band { border-top-width: 1px; padding-block: 8px 10px; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 14px; align-items: center; }
+#play { width: 40px; height: 34px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--fg); font-size: 16px; cursor: pointer; }
+#play[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.tl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tl .top { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+#valid { font: 500 15px var(--font-num); }
+#leadlbl { color: var(--muted); font: 13px var(--font-num); }
+#lead { width: 100%; accent-color: var(--accent); }
+.ticks { position: relative; height: 14px; color: var(--muted); font: 11px var(--font-num); }
+.ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.legend { display: flex; flex-direction: column; gap: 3px; min-width: 200px; }
+.legend .t { font-size: 12.5px; color: var(--muted); }
+#cbar { width: 240px; max-width: 100%; height: 12px; border-radius: 2px; display: block; }
+.legend .lab { position: relative; height: 14px; font: 11px var(--font-num); color: var(--muted); width: 240px; max-width: 100%; }
+.legend .lab span { position: absolute; transform: translateX(-50%); }
+@media (max-width: 760px) { footer.band { grid-template-columns: auto 1fr; } .legend { grid-column: 1 / -1; } }
+.fps { color: var(--muted); font: 11px var(--font-num); }
+@media (prefers-reduced-motion: reduce) { .seg, select { transition: none; } }
+</style>
+
+<div id="app">
+  <header class="band">
+    <div class="brand"><b id="brand">Forecast Compare</b><span id="sub">Loading the forecast week…</span></div>
+    <div class="group" role="group" aria-label="Parameter" id="params"><label>Field</label></div>
+    <div class="group">
+      <label class="chk" id="isochk"><input type="checkbox" id="iso" checked> Isobars</label>
+      <label class="chk" id="flowchk"><input type="checkbox" id="flow" checked> Wind flow</label>
+    </div>
+    <div class="group" role="group" aria-label="Panels">
+      <label>Panels</label>
+      <button class="seg" data-n="1" aria-pressed="false">1</button>
+      <button class="seg" data-n="2" aria-pressed="false">2</button>
+      <button class="seg" data-n="3" aria-pressed="false">3</button>
+      <button class="seg" data-n="4" aria-pressed="true">4</button>
+    </div>
+    <div class="group"><label for="base">Run</label><select id="base"></select></div>
+  </header>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <div id="panels" data-n="4"></div>
+  </div>
+  <footer class="band">
+    <button id="play" aria-pressed="true" aria-label="Play or pause">❚❚</button>
+    <div class="tl">
+      <div class="top"><span id="valid">–</span><span id="leadlbl">–</span></div>
+      <input type="range" id="lead" min="0" max="72" step="0.05" value="0" aria-label="Forecast lead time in hours">
+      <div class="ticks" id="ticks"></div>
+    </div>
+    <div class="legend"><span class="t" id="ltitle"></span><canvas id="cbar" width="240" height="12"></canvas><div class="lab" id="llab"></div>
+      <span class="fps"><span id="fps"></span> · <span id="credit">IFS data © ECMWF, CC BY 4.0 · BRIS weights: MET Norway</span></span></div>
+  </footer>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- state
+const DATA = "./";
+const S = {
+  idx: null, models: {}, param: "tp", iso: true, flow: true, n: 4,
+  panels: [ "an", "hres", "b1725r", "b1725ra" ], base: null, lead: 0, playing: true, speed: 7.2, // hours of lead per second
+  view: { cx: 430, cy: 470, s: 1 }, hover: null, hoverPanel: -1, trailsDirty: true,
+};
+// kind: 0 temperature (K -> °C), 1 square-root encoded amount, 2 wind from u/v, 3 cloud fraction, 4 linear
+const PARAMS = {
+  t2m: { label: "2 m temp", kind: 0, title: "2 m temperature (°C)", fields: ["t2m"], lo: -5, hi: 35, ticks: [-5, 5, 15, 25, 35],
+    stops: [[0, "#081d45"], [.15, "#21418f"], [.3, "#5a4b9a"], [.45, "#8e5891"], [.6, "#c56778"], [.72, "#e98458"], [.86, "#f8b55c"], [1, "#fbe98a"]] },
+  tp: { label: "Rain", kind: 1, unit: "mm/6 h", title: "6 h precipitation (mm)", fields: ["tp"], lo: 0, hi: 100, ticks: [0.2, 1, 5, 20, 50, 100], sqrt: true,
+    stops: [[0, "#1c3b6e"], [.15, "#2160b0"], [.3, "#2f86d6"], [.45, "#3fb0ea"], [.6, "#7dd5f5"], [.75, "#c3eefb"], [.88, "#ffffff"], [1, "#ff8fcf"]] },
+  wind: { label: "10 m wind", kind: 2, title: "10 m wind speed (m/s)", fields: ["u10", "v10"], lo: 0, hi: 30, ticks: [0, 5, 10, 15, 20, 25, 30],
+    stops: [[0, "#1b1f3b"], [.15, "#2c3f75"], [.3, "#21678c"], [.45, "#1f8d8a"], [.6, "#3bb37a"], [.75, "#8fd14f"], [.9, "#e3e23a"], [1, "#fff4a8"]] },
+  tcc: { label: "Cloud", kind: 3, title: "Total cloud cover (%)", fields: ["tcc"], lo: 0, hi: 100, ticks: [0, 25, 50, 75, 100],
+    stops: [[0, "#ffffff00"], [1, "#ffffff"]] },
+  swe: { label: "Snow", kind: 1, unit: "mm snow", title: "Snow water equivalent (mm)", fields: ["swe"], lo: 0, hi: 1000, ticks: [10, 100, 300, 1000], sqrt: true,
+    stops: [[0, "#3a2f6b"], [.2, "#5b4ea8"], [.4, "#6f84d0"], [.6, "#9cc0ea"], [.8, "#d6ebfa"], [1, "#ffffff"]] },
+  ro: { label: "Runoff", kind: 1, unit: "mm/3 h runoff", title: "3 h runoff (mm)", fields: ["ro"], lo: 0, hi: 20, ticks: [0.2, 1, 5, 20], sqrt: true,
+    stops: [[0, "#103b3a"], [.25, "#13706a"], [.5, "#21a58f"], [.75, "#7fd6a3"], [1, "#e8f7b0"]] },
+};
+const $ = (q) => document.querySelector(q);
+let META = {}, HOURS = 72, STEP = 6;
+const gl = $("#gl").getContext("webgl2", { antialias: false, premultipliedAlpha: true, alpha: false });
+if (!gl) { $("#sub").textContent = "This viewer needs WebGL2, which this browser does not provide."; throw new Error("no webgl2"); }
+
+// ---------------------------------------------------------------- shaders
+const COMMON = `#version 300 es
+precision highp float; precision highp int;
+uniform vec4 uL;   // lat0 (rad), lon0 (rad), R, n
+uniform vec4 uL2;  // F, rho0, x0, y0
+uniform float uDX;
+const float PI = 3.141592653589793;
+vec2 gridToLL(vec2 g) {        // grid index units -> (lat, lon) degrees, Lambert conformal tangent
+  float x = uL2.z + g.x * uDX, y = uL2.w + g.y * uDX;
+  float n = uL.w, sn = sign(n);
+  float rho = sn * sqrt(x * x + (uL2.y - y) * (uL2.y - y));
+  float th = atan(sn * x, sn * (uL2.y - y));
+  float lat = 2.0 * atan(pow(uL.z * uL2.x / rho, 1.0 / n)) - 0.5 * PI;
+  return vec2(degrees(lat), degrees(th / n + uL.y));
+}
+vec2 llToGrid(vec2 ll) {
+  float lat = radians(ll.x), lon = radians(ll.y);
+  float rho = uL.z * uL2.x / pow(tan(0.25 * PI + 0.5 * lat), uL.w);
+  float th = uL.w * (lon - uL.y);
+  return vec2((rho * sin(th) - uL2.z) / uDX, (uL2.y - rho * cos(th) - uL2.w) / uDX);
+}
+// a dataset: grid type, geometry, atlas tiling
+uniform int uGT;          // 0 Lambert (this grid), 1 lat/lon
+uniform vec4 uLLg;        // lat0, lon0, dlat, dlon of a lat/lon grid
+uniform ivec4 uTile;      // tile w, h, cols, nframes
+uniform ivec4 uMTile;     // msl tile w, h, cols, stride
+uniform ivec3 uFr;        // frame a, frame b, ok
+uniform float uFt;
+uniform int uNY;
+vec2 dataCR(vec2 g) {     // column/row (north-first) of the dataset's own grid
+  if (uGT == 0) return vec2(g.x, float(uNY - 1) - g.y);
+  vec2 ll = gridToLL(g);
+  return vec2((ll.y - uLLg.y) / uLLg.w, (ll.x - uLLg.x) / uLLg.z);
+}
+bool inTile(vec2 cr, ivec2 wh) { return cr.x >= 0.0 && cr.y >= 0.0 && cr.x <= float(wh.x - 1) && cr.y <= float(wh.y - 1); }
+float tex1(sampler2D t, int fr, ivec2 wh, int cols, vec2 cr) {   // manual bilinear inside one tile
+  ivec2 o = ivec2((fr % cols) * wh.x, (fr / cols) * wh.y);
+  vec2 p = clamp(cr, vec2(0.0), vec2(wh - 1));
+  ivec2 i0 = ivec2(floor(p)); ivec2 i1 = min(i0 + 1, wh - 1); vec2 f = p - vec2(i0);
+  float a = texelFetch(t, o + i0, 0).r, b = texelFetch(t, o + ivec2(i1.x, i0.y), 0).r;
+  float c = texelFetch(t, o + ivec2(i0.x, i1.y), 0).r, d = texelFetch(t, o + i1, 0).r;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float field(sampler2D t, vec2 cr) {
+  return mix(tex1(t, uFr.x, uTile.xy, uTile.z, cr), tex1(t, uFr.y, uTile.xy, uTile.z, cr), uFt);
+}
+float msl1(sampler2D t, int fr, vec2 cr) {
+  ivec2 wh = uMTile.xy; int cols = uMTile.z;
+  ivec2 o = ivec2((fr % cols) * wh.x, (fr / cols) * wh.y);
+  vec2 p = clamp(cr, vec2(0.0), vec2(wh - 1));
+  ivec2 i0 = ivec2(floor(p)); ivec2 i1 = min(i0 + 1, wh - 1); vec2 f = p - vec2(i0);
+  vec4 A = texelFetch(t, o + i0, 0), B = texelFetch(t, o + ivec2(i1.x, i0.y), 0);
+  vec4 C = texelFetch(t, o + ivec2(i0.x, i1.y), 0), D = texelFetch(t, o + i1, 0);
+  float a = A.r * 256.0 + A.g, b = B.r * 256.0 + B.g, c = C.r * 256.0 + C.g, d = D.r * 256.0 + D.g;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) * 255.0 / 65535.0;
+}
+float msl(sampler2D t, vec2 cr) {
+  vec2 m = cr / float(uMTile.w);
+  return mix(msl1(t, uFr.x, m), msl1(t, uFr.y, m), uFt);
+}
+vec2 windGrid(vec2 g, vec2 uv) {  // east/north wind -> grid directions
+  vec2 ll = gridToLL(g);
+  vec2 p0 = llToGrid(ll), pn = llToGrid(ll + vec2(0.05, 0.0)), pe = llToGrid(ll + vec2(0.0, 0.05));
+  return uv.x * normalize(pe - p0) + uv.y * normalize(pn - p0);
+}
+`;
+
+const VS_QUAD = `#version 300 es
+in vec2 aP; out vec2 vP; void main() { vP = aP * 0.5 + 0.5; gl_Position = vec4(aP, 0.0, 1.0); }`;
+
+const FS_FIELD = COMMON + `
+in vec2 vP; out vec4 o;
+uniform vec4 uView;       // cx, cy, scale (device px per grid unit), 0
+uniform vec4 uRect;       // panel x, y, w, h (device px, GL origin bottom-left)
+uniform sampler2D uF0, uF1, uM, uShade, uLand, uCmap;
+uniform int uParam;       // PARAMS kind: 0 t2m, 1 sqrt amount, 2 wind, 3 tcc, 4 linear
+uniform vec4 uEnc0, uEnc1;  // lo, hi of field 0 / field 1
+uniform vec2 uRange;      // colour scale lo, hi
+uniform int uHas, uIso;   // data available, isobars on
+uniform vec3 uHover;      // grid x, y, on
+uniform int uNX;
+void main() {
+  vec2 px = gl_FragCoord.xy - uRect.xy - 0.5 * uRect.zw;
+  vec2 g = uView.xy + px / uView.z;
+  // base map: sea, land relief from the IFS orography of the 2.5 km grid
+  vec2 buv = vec2((g.x + 0.5) / float(uNX), 1.0 - (g.y + 0.5) / float(uNY));
+  bool inB = buv.x > 0.0 && buv.x < 1.0 && buv.y > 0.0 && buv.y < 1.0;
+  float land = inB ? texture(uLand, buv).r : 0.0, shade = inB ? texture(uShade, buv).r : 0.5;
+  vec3 col = mix(vec3(0.045, 0.085, 0.12), vec3(0.17, 0.2, 0.2) * (0.55 + 0.9 * shade), land);
+  vec2 cr = dataCR(g);
+  bool ok = uHas == 1 && uFr.z == 1 && inTile(cr, uTile.xy);
+  float a = 0.0; vec3 c = vec3(0.0);
+  if (ok) {
+    float v0 = field(uF0, cr);
+    float val = 0.0;
+    if (uParam == 0) val = uEnc0.x + v0 * (uEnc0.y - uEnc0.x) - 273.15;
+    else if (uParam == 1) val = uEnc0.y * v0 * v0;
+    else if (uParam == 2) {
+      float u = uEnc0.x + v0 * (uEnc0.y - uEnc0.x), v = uEnc1.x + field(uF1, cr) * (uEnc1.y - uEnc1.x);
+      val = length(vec2(u, v));
+    } else if (uParam == 4) val = uEnc0.x + v0 * (uEnc0.y - uEnc0.x);
+    else val = v0 * 100.0;
+    float x = (val - uRange.x) / (uRange.y - uRange.x);
+    if (uParam == 1) x = sqrt(max(val, 0.0) / uRange.y);
+    vec4 cm = texture(uCmap, vec2(clamp(x, 0.0, 1.0), 0.5));
+    c = cm.rgb; a = cm.a;
+    if (uParam == 1) a *= smoothstep(0.08, 0.25, val);           // no colour below ~0.1 mm
+    if (uParam == 3) a = pow(clamp(val / 100.0, 0.0, 1.0), 0.85) * 0.92;
+    else if (uParam != 1) a *= 0.9;
+    c *= mix(1.0, 0.7 + 0.6 * shade, 0.55 * land);               // relief through the field
+  } else {
+    col *= 0.62;                                                 // outside this model's domain
+  }
+  col = mix(col, c, a);
+  // domain edge
+  vec2 w = fwidth(cr);
+  float e = min(min(cr.x, cr.y), min(float(uTile.x - 1) - cr.x, float(uTile.y - 1) - cr.y)) / max(max(w.x, w.y), 1e-6);
+  if (uHas == 1 && e > -1.0) col = mix(col, vec3(0.75, 0.85, 0.92), 0.5 * (1.0 - smoothstep(0.0, 1.4, abs(e))));
+  // isobars every 4 hPa, bold every 20 hPa
+  if (uIso == 1) {                                             // uniform branch: derivatives stay defined
+    float P = uEnc1.z + msl(uM, cr) * (uEnc1.w - uEnc1.z);
+    float k = P / 4.0, d = abs(fract(k + 0.5) - 0.5) / max(fwidth(k), 1e-5);
+    float bold = abs(fract(P / 20.0 + 0.5) - 0.5) * 5.0 < 0.5 ? 1.0 : 0.0;
+    if (ok) col = mix(col, vec3(1.0), (0.42 + 0.3 * bold) * (1.0 - smoothstep(0.4 + 0.5 * bold, 1.3 + 0.5 * bold, d)));
+  }
+  // crosshair
+  if (uHover.z > 0.5) {
+    vec2 dp = (g - uHover.xy) * uView.z;
+    float arm = (abs(dp.x) < 0.75 && abs(dp.y) > 4.0 && abs(dp.y) < 13.0) || (abs(dp.y) < 0.75 && abs(dp.x) > 4.0 && abs(dp.x) < 13.0) ? 1.0 : 0.0;
+    col = mix(col, vec3(1.0), arm);
+  }
+  o = vec4(col, 1.0);
+}`;
+
+const VS_LINE = `#version 300 es
+in vec2 aP; uniform vec4 uView; uniform vec4 uRect;
+void main() { vec2 px = (aP - uView.xy) * uView.z; gl_Position = vec4(px / (0.5 * uRect.zw), 0.0, 1.0); }`;
+const FS_LINE = `#version 300 es
+precision mediump float; uniform vec4 uC; out vec4 o; void main() { o = uC; }`;
+
+// particles: state = (grid x, grid y, age); update by transform feedback
+const VS_UPD = COMMON + `
+in vec3 aS; out vec3 vS;
+uniform sampler2D uF0, uF1; uniform vec4 uEnc0, uEnc1; uniform int uHas;
+uniform vec4 uSpawn; uniform float uStep, uSeed;
+float h1(float n) { return fract(sin(n) * 43758.5453123); }
+void main() {
+  vec3 s = aS;
+  float id = float(gl_VertexID);
+  vec2 cr = dataCR(s.xy);
+  bool ok = uHas == 1 && uFr.z == 1 && inTile(cr, uTile.xy);
+  float maxAge = 50.0 + 70.0 * h1(id * 1.37);
+  if (ok) {
+    vec2 uv = vec2(uEnc0.x + field(uF0, cr) * (uEnc0.y - uEnc0.x), uEnc1.x + field(uF1, cr) * (uEnc1.y - uEnc1.x));
+    s.xy += windGrid(s.xy, uv) * uStep;
+    s.z += 1.0;
+  }
+  bool out_ = s.x < uSpawn.x || s.y < uSpawn.y || s.x > uSpawn.z || s.y > uSpawn.w;
+  if (!ok || out_ || s.z > maxAge) {
+    float r1 = h1(id * 12.9898 + uSeed), r2 = h1(id * 78.233 + uSeed * 1.7);
+    s = vec3(mix(uSpawn.xy, uSpawn.zw, vec2(r1, r2)), 0.0);
+  }
+  vS = s;
+}`;
+const FS_NOP = `#version 300 es
+precision mediump float; out vec4 o; void main() { o = vec4(0.0); }`;
+const VS_SEG = `#version 300 es
+in vec3 aOld; in vec3 aNew; uniform vec4 uView; uniform vec4 uRect; uniform vec2 uCanvas; out float vA;
+void main() {
+  vec3 s = gl_VertexID == 0 ? aOld : aNew;
+  vA = (aNew.z < aOld.z || aNew.z < 1.5) ? 0.0 : min(1.0, aNew.z / 12.0);
+  vec2 px = (s.xy - uView.xy) * uView.z + uRect.xy + 0.5 * uRect.zw;
+  gl_Position = vec4(px / uCanvas * 2.0 - 1.0, 0.0, 1.0);
+}`;
+const FS_SEG = `#version 300 es
+precision mediump float; in float vA; uniform vec4 uC; out vec4 o; void main() { o = uC * vA; }`;
+const FS_FADE = `#version 300 es
+precision mediump float; in vec2 vP; uniform sampler2D uT; uniform float uK; out vec4 o;
+void main() { vec4 c = texture(uT, vP) * uK; o = c.a < 0.02 ? vec4(0.0) : c; }`;
+const FS_BLIT = `#version 300 es
+precision mediump float; in vec2 vP; uniform sampler2D uT; out vec4 o; void main() { o = texture(uT, vP); }`;
+// probe: values at the cursor, packed to bytes (read back with readPixels)
+const VS_PROBE = `#version 300 es
+uniform float uX; void main() { gl_PointSize = 1.0; gl_Position = vec4((uX + 0.5) / 8.0 * 2.0 - 1.0, 0.0, 0.0, 1.0); }`;
+const FS_PROBE = COMMON + `
+uniform sampler2D uF0, uF1, uM; uniform int uHas, uWhich; uniform vec2 uG; out vec4 o;
+vec2 pk(float x) { x = clamp(x, 0.0, 1.0) * 65535.0; return vec2(floor(x / 256.0), mod(floor(x), 256.0)) / 255.0; }
+void main() {
+  vec2 cr = dataCR(uG);
+  bool ok = uHas == 1 && uFr.z == 1 && inTile(cr, uTile.xy);
+  if (!ok) { o = vec4(0.0); return; }
+  if (uWhich == 0) o = vec4(pk(field(uF0, cr)), 1.0, 1.0);
+  else if (uWhich == 1) o = vec4(pk(field(uF1, cr)), 1.0, 1.0);
+  else o = vec4(pk(msl(uM, cr)), 1.0, 1.0);
+}`;
+
+function compile(vs, fs, tf) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) + "\n" + src.split("\n").map((l, i) => (i + 1) + ": " + l).join("\n"));
+    gl.attachShader(p, sh);
+  }
+  if (tf) gl.transformFeedbackVaryings(p, tf, gl.INTERLEAVED_ATTRIBS);
+  gl.bindAttribLocation(p, 0, "aP"); gl.bindAttribLocation(p, 0, "aS");
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
+  return { p, u };
+}
+const P = {
+  field: compile(VS_QUAD, FS_FIELD), line: compile(VS_LINE, FS_LINE), upd: compile(VS_UPD, FS_NOP, ["vS"]),
+  seg: compile(VS_SEG, FS_SEG), fade: compile(VS_QUAD, FS_FADE), blit: compile(VS_QUAD, FS_BLIT), probe: compile(VS_PROBE, FS_PROBE),
+};
+
+// ---------------------------------------------------------------- GL resources
+const quad = gl.createVertexArray(); gl.bindVertexArray(quad);
+const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null);
+const emptyVAO = gl.createVertexArray();
+
+function texFrom(src, internal, format, filter) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, format, gl.UNSIGNED_BYTE, src);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, filter], [gl.TEXTURE_MAG_FILTER, filter], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+  return t;
+}
+const dummy = (() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); return t; })();
+
+function hexA(h) { const n = h.length > 7 ? parseInt(h.slice(7, 9), 16) / 255 : 1; return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16), n * 255]; }
+function rampPixels(stops, n = 256) {
+  const px = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1); let k = 0; while (k < stops.length - 2 && x > stops[k + 1][0]) k++;
+    const [x0, c0] = stops[k], [x1, c1] = stops[k + 1]; const f = Math.min(1, Math.max(0, (x - x0) / (x1 - x0)));
+    const a = hexA(c0), b = hexA(c1);
+    for (let j = 0; j < 4; j++) px[i * 4 + j] = Math.round(a[j] + (b[j] - a[j]) * f);
+  }
+  return px;
+}
+const cmaps = {};
+for (const [k, p] of Object.entries(PARAMS)) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, rampPixels(p.stops));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  cmaps[k] = t;
+}
+
+// atlas cache: url -> { tex, state }, least recently used dropped beyond a budget
+const cache = new Map(); let gpuBytes = 0; const BUDGET = 700e6;
+function atlasTex(url, rgb) {
+  let e = cache.get(url);
+  if (e) { cache.delete(url); cache.set(url, e); return e.tex; }
+  e = { tex: null, bytes: 0 }; cache.set(url, e);
+  fetch(DATA + url).then((r) => { if (!r.ok) throw new Error(r.status + " " + url); return r.blob(); })
+    .then((b) => createImageBitmap(b, { premultiplyAlpha: "none", colorSpaceConversion: "none" }))
+    .then((bm) => {
+      e.tex = rgb ? texFrom(bm, gl.RGBA8, gl.RGBA, gl.NEAREST) : texFrom(bm, gl.R8, gl.RED, gl.NEAREST);
+      e.bytes = bm.width * bm.height * (rgb ? 4 : 1); gpuBytes += e.bytes; bm.close && bm.close();
+      for (const [k, v] of cache) { if (gpuBytes < BUDGET) break; if (v.tex && v !== e) { gl.deleteTexture(v.tex); gpuBytes -= v.bytes; cache.delete(k); } }
+      S.trailsDirty = true;
+    }).catch((err) => { console.warn(err); e.failed = true; });
+  return null;
+}
+
+// ---------------------------------------------------------------- geometry
+const D2R = Math.PI / 180;
+let L = null, LCCU = null;
+function lccSetup(c) {
+  const lat0 = c.lat0 * D2R, n = Math.sin(lat0);
+  const F = Math.cos(lat0) * Math.pow(Math.tan(Math.PI / 4 + lat0 / 2), n) / n;
+  const rho0 = c.R * F / Math.pow(Math.tan(Math.PI / 4 + lat0 / 2), n);
+  L = { ...c, n, F, rho0 };
+  LCCU = { uL: [lat0, c.lon0 * D2R, c.R, n], uL2: [F, rho0, c.x0, c.y0], uDX: c.dx };
+}
+function llToGrid(lat, lon) {
+  const rho = L.R * L.F / Math.pow(Math.tan(Math.PI / 4 + lat * D2R / 2), L.n), th = L.n * (lon - L.lon0) * D2R;
+  return [(rho * Math.sin(th) - L.x0) / L.dx, (L.rho0 - rho * Math.cos(th) - L.y0) / L.dx];
+}
+function gridToLL(gx, gy) {
+  const x = L.x0 + gx * L.dx, y = L.y0 + gy * L.dx, sn = Math.sign(L.n);
+  const rho = sn * Math.hypot(x, L.rho0 - y), th = Math.atan2(sn * x, sn * (L.rho0 - y));
+  return [(2 * Math.atan(Math.pow(L.R * L.F / rho, 1 / L.n)) - Math.PI / 2) / D2R, th / L.n / D2R + L.lon0];
+}
+function bbox(m) {  // grid-unit bounding box of a model's domain
+  const g = m.grid;
+  if (g.type === "lcc") return [0, 0, g.nx - 1, g.ny - 1];
+  const pts = [];
+  for (let i = 0; i <= 20; i++) for (const [a, b] of [[i / 20, 0], [i / 20, 1], [0, i / 20], [1, i / 20]])
+    pts.push(llToGrid(g.lat0 + b * (g.ny - 1) * g.dlat, g.lon0 + a * (g.nx - 1) * g.dlon));
+  return [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))];
+}
+
+let coastVAO = null, coastN = 0, gratVAO = null, gratN = 0, shadeTex = dummy, landTex = dummy;
+function lineVAO(segs) {
+  const v = gl.createVertexArray(); gl.bindVertexArray(v);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(segs), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null); return v;
+}
+
+// ---------------------------------------------------------------- panels and particles
+const panelsEl = $("#panels");
+const panels = [];  // { el, sel, ro, msg, rect, ps }
+function modelOptions(sel, current) {
+  sel.innerHTML = "";
+  const groups = {};
+  for (const m of S.idx.models) (groups[m.group] ||= []).push(m);
+  for (const [g, ms] of Object.entries(groups)) {
+    const og = document.createElement("optgroup"); og.label = g;
+    for (const m of ms) { const o = document.createElement("option"); o.value = m.id; o.textContent = m.name; og.appendChild(o); }
+    sel.appendChild(og);
+  }
+  sel.value = S.models[current] ? current : S.idx.models[0].id;
+}
+function buildPanels() {
+  panelsEl.dataset.n = S.n; panelsEl.innerHTML = ""; panels.length = 0;
+  for (let i = 0; i < S.n; i++) {
+    const el = document.createElement("div"); el.className = "pn";
+    el.innerHTML = `<div class="hd"><select id="model${i}" aria-label="Model in panel ${i + 1}"></select><div class="ro"></div></div><div class="msg"></div>`;
+    panelsEl.appendChild(el);
+    const sel = el.querySelector("select");
+    if (!S.panels[i]) S.panels[i] = S.idx.models[i % S.idx.models.length].id;
+    modelOptions(sel, S.panels[i]); S.panels[i] = sel.value;
+    sel.addEventListener("change", () => { S.panels[i] = sel.value; S.trailsDirty = true; });
+    sel.addEventListener("pointerdown", (e) => e.stopPropagation());
+    panels.push({ el, sel, ro: el.querySelector(".ro"), msg: el.querySelector(".msg"), rect: null, ps: null });
+  }
+  resize();
+}
+
+function makeParticles(n) {
+  const init = new Float32Array(n * 3).fill(-1e6);   // off-domain: respawned on the first step
+  const bufs = [0, 1].map(() => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, init, gl.DYNAMIC_COPY); return b; });
+  const upd = bufs.map((b) => { const v = gl.createVertexArray(); gl.bindVertexArray(v); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null); return v; });
+  const lo = gl.getAttribLocation(P.seg.p, "aOld"), ln = gl.getAttribLocation(P.seg.p, "aNew");
+  const seg = [0, 1].map((k) => { const v = gl.createVertexArray(); gl.bindVertexArray(v);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs[k]); gl.enableVertexAttribArray(lo); gl.vertexAttribPointer(lo, 3, gl.FLOAT, false, 0, 0); gl.vertexAttribDivisor(lo, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs[1 - k]); gl.enableVertexAttribArray(ln); gl.vertexAttribPointer(ln, 3, gl.FLOAT, false, 0, 0); gl.vertexAttribDivisor(ln, 1);
+    gl.bindVertexArray(null); return v; });
+  return { n, bufs, upd, seg, cur: 0 };
+}
+function freeParticles(ps) { if (!ps) return; ps.bufs.forEach((b) => gl.deleteBuffer(b)); ps.upd.concat(ps.seg).forEach((v) => gl.deleteVertexArray(v)); }
+
+// trail framebuffers at canvas size
+let trails = null;
+function makeTrails(w, h) {
+  if (trails) trails.forEach((t) => { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); });
+  trails = [0, 1].map(() => { const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    return { tex, fb }; });
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); S.trailsDirty = true;
+}
+let trailCur = 0;
+const probeFB = (() => { const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 8, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); return fb; })();
+
+let DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const cv = $("#gl"), r = cv.getBoundingClientRect();
+  cv.width = Math.max(1, Math.round(r.width * DPR)); cv.height = Math.max(1, Math.round(r.height * DPR));
+  makeTrails(cv.width, cv.height);
+  for (const p of panels) {
+    const b = p.el.getBoundingClientRect();
+    p.css = { x: b.left - r.left, y: b.top - r.top, w: b.width, h: b.height };
+    p.rect = [Math.round(p.css.x * DPR), Math.round(cv.height - (p.css.y + b.height) * DPR), Math.round(b.width * DPR), Math.round(b.height * DPR)];
+    const n = Math.min(70000, Math.max(3000, Math.round(b.width * b.height / 16)));
+    if (!p.ps || p.ps.n !== n) { freeParticles(p.ps); p.ps = makeParticles(n); }
+  }
+}
+window.addEventListener("resize", () => { resize(); });
+
+// ---------------------------------------------------------------- time
+function seriesFor(m, validT) {   // the series and fractional frame for a model at a valid time
+  if (m.series.length === 1 && m.series[0].key === "an") { const s = m.series[0]; return { s, f: (validT - s.t0) / (s.dt || 21600) }; }
+  const s = m.series.find((x) => x.key === S.base);
+  return s ? { s, f: (validT - s.t0) / (s.dt || 21600) } : null;
+}
+function baseT() { const b = S.base; return Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8), +b.slice(8, 10)) / 1000; }
+const fmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false });
+let fmtNZ = new Intl.DateTimeFormat("en-NZ", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Pacific/Auckland", hour12: false });
+
+// ---------------------------------------------------------------- per-panel draw state
+function setGeo(prog, m, s, f) {
+  const u = prog.u, g = m.grid;
+  gl.uniform4fv(u.uL, LCCU.uL); gl.uniform4fv(u.uL2, LCCU.uL2); gl.uniform1f(u.uDX, LCCU.uDX); gl.uniform1i(u.uNY, S.idx.lcc.ny);
+  gl.uniform1i(u.uGT, g.type === "lcc" ? 0 : 1);
+  if (g.type === "ll") gl.uniform4f(u.uLLg, g.lat0, g.lon0, g.dlat, g.dlon);
+  const tw = g.type === "lcc" ? g.nx : g.nx, th = g.ny;
+  gl.uniform4i(u.uTile, tw, th, s.cols, s.n);
+  const st = m.mstride; gl.uniform4i(u.uMTile, Math.ceil(tw / st), Math.ceil(th / st), s.mcols, st);
+  const fa = Math.floor(f), ok = f >= 0 && f <= s.n - 1;
+  gl.uniform3i(u.uFr, Math.max(0, Math.min(s.n - 1, fa)), Math.max(0, Math.min(s.n - 1, fa + 1)), ok ? 1 : 0);
+  gl.uniform1f(u.uFt, f - fa);
+}
+function panelData(p, i, validT) {
+  const m = S.models[S.panels[i]]; if (!m) return null;
+  const sf = seriesFor(m, validT); if (!sf) return { m, msg: "No run at this base time" };
+  const prm = PARAMS[S.param], files = sf.s.files;
+  const need = prm.fields.filter((f) => !files[f]);
+  const enc = S.idx.enc;
+  let t0 = null, t1 = null, has = need.length === 0;
+  if (has) { t0 = atlasTex(m.id + "/" + files[prm.fields[0]]); if (prm.fields[1]) t1 = atlasTex(m.id + "/" + files[prm.fields[1]]); }
+  const tm = S.iso && files.msl ? atlasTex(m.id + "/" + files.msl, true) : null;
+  let tu = null, tv = null;
+  if (S.flow && files.u10) { tu = S.param === "wind" ? t0 : atlasTex(m.id + "/" + files.u10); tv = S.param === "wind" ? t1 : atlasTex(m.id + "/" + files.v10); }
+  const loading = (has && (!t0 || (prm.fields[1] && !t1)));
+  let msg = !has ? `${prm.title.split(" (")[0]} not in this model` : loading ? "Loading…" : "";
+  if (sf.f < 0 || sf.f > sf.s.n - 1) msg = "Outside this run";
+  return { m, s: sf.s, f: sf.f, has: has && !loading, t0, t1, tm, tu, tv, enc, msg };
+}
+
+// ---------------------------------------------------------------- render
+let last = performance.now(), frames = 0, fpsT = last, seed = 1;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (S.playing && S.idx) { S.lead += dt * S.speed; if (S.lead > HOURS) S.lead = 0; $("#lead").value = S.lead; updateTime(); }
+  if (S.idx) draw();
+  frames++; if (now - fpsT > 1000) { $("#fps").textContent = `${frames} fps`; frames = 0; fpsT = now; }
+  requestAnimationFrame(frame);
+}
+function bindTex(unit, tex, loc) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex || dummy); gl.uniform1i(loc, unit); }
+function draw() {
+  const cv = $("#gl"), W = cv.width, H = cv.height, validT = baseT() + S.lead * 3600;
+  const enc = S.idx.enc, prm = PARAMS[S.param];
+  const pid = prm.kind;
+  gl.disable(gl.BLEND); gl.enable(gl.SCISSOR_TEST);
+  const pdata = panels.map((p, i) => panelData(p, i, validT));
+  // 1. fields
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(P.field.p); gl.bindVertexArray(quad);
+  const U = P.field.u;
+  panels.forEach((p, i) => {
+    const d = pdata[i]; const [x, y, w, h] = p.rect;
+    gl.scissor(x, y, w, h); gl.viewport(x, y, w, h);
+    gl.uniform4f(U.uView, S.view.cx, S.view.cy, S.view.s * DPR, 0); gl.uniform4f(U.uRect, x, y, w, h);
+    gl.uniform1i(U.uNX, S.idx.lcc.nx);
+    if (d && d.s) setGeo(P.field, d.m, d.s, d.f); else { gl.uniform1i(U.uGT, 0); gl.uniform3i(U.uFr, 0, 0, 0); gl.uniform4fv(U.uL, LCCU.uL); gl.uniform4fv(U.uL2, LCCU.uL2); gl.uniform1f(U.uDX, LCCU.uDX); gl.uniform1i(U.uNY, S.idx.lcc.ny); gl.uniform4i(U.uTile, 1, 1, 1, 1); gl.uniform4i(U.uMTile, 1, 1, 1, 1); }
+    bindTex(0, d && d.t0, U.uF0); bindTex(1, d && d.t1, U.uF1); bindTex(2, d && d.tm, U.uM);
+    bindTex(3, shadeTex, U.uShade); bindTex(4, landTex, U.uLand); bindTex(5, cmaps[S.param], U.uCmap);
+    gl.uniform1i(U.uParam, pid);
+    const e0 = enc[prm.fields[0]], e1 = prm.fields[1] ? enc[prm.fields[1]] : [0, 1];
+    gl.uniform4f(U.uEnc0, e0[0], e0[1], 0, 0); gl.uniform4f(U.uEnc1, e1[0], e1[1], enc.msl[0], enc.msl[1]);
+    gl.uniform2f(U.uRange, prm.lo, prm.hi);
+    gl.uniform1i(U.uHas, d && d.has ? 1 : 0); gl.uniform1i(U.uIso, S.iso && d && d.tm && d.has ? 1 : 0);
+    gl.uniform3f(U.uHover, S.hover ? S.hover[0] : 0, S.hover ? S.hover[1] : 0, S.hover ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    p.msg.textContent = d ? d.msg : "";
+  });
+  // 2. coastline and graticule
+  gl.useProgram(P.line.p); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  panels.forEach((p) => {
+    const [x, y, w, h] = p.rect; gl.scissor(x, y, w, h); gl.viewport(x, y, w, h);
+    gl.uniform4f(P.line.u.uView, S.view.cx, S.view.cy, S.view.s * DPR, 0); gl.uniform4f(P.line.u.uRect, x, y, w, h);
+    if (gratVAO) { gl.uniform4f(P.line.u.uC, 0.6, 0.72, 0.82, 0.13); gl.bindVertexArray(gratVAO); gl.drawArrays(gl.LINES, 0, gratN); }
+    if (coastVAO) { gl.uniform4f(P.line.u.uC, 0.92, 0.96, 1.0, S.param === "tcc" ? 0.45 : 0.7); gl.bindVertexArray(coastVAO); gl.drawArrays(gl.LINES, 0, coastN); }
+  });
+  // 3. wind flow: advect particles, fade and add trails
+  if (S.flow) {
+    if (S.trailsDirty) { for (const t of trails) { gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb); gl.disable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); gl.enable(gl.SCISSOR_TEST); } S.trailsDirty = false; }
+    const src = trails[trailCur], dst = trails[1 - trailCur];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, W, H);
+    gl.disable(gl.BLEND); gl.useProgram(P.fade.p); gl.bindVertexArray(quad);
+    bindTex(0, src.tex, P.fade.u.uT); gl.uniform1f(P.fade.u.uK, 0.93);
+    gl.scissor(0, 0, W, H); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    seed = (seed + 0.618) % 97;
+    panels.forEach((p, i) => {
+      const d = pdata[i]; if (!d || !d.s || !d.tu || !d.tv) return;
+      const [x, y, w, h] = p.rect, ps = p.ps;
+      // update
+      gl.useProgram(P.upd.p); setGeo(P.upd, d.m, d.s, d.f);
+      bindTex(0, d.tu, P.upd.u.uF0); bindTex(1, d.tv, P.upd.u.uF1);
+      gl.uniform4f(P.upd.u.uEnc0, enc.u10[0], enc.u10[1], 0, 0); gl.uniform4f(P.upd.u.uEnc1, enc.v10[0], enc.v10[1], 0, 0);
+      gl.uniform1i(P.upd.u.uHas, 1);
+      const sv = S.view.s, hw = p.css.w / 2 / sv, hh = p.css.h / 2 / sv, bb = d.m.bb;
+      gl.uniform4f(P.upd.u.uSpawn, Math.max(bb[0], S.view.cx - hw), Math.max(bb[1], S.view.cy - hh), Math.min(bb[2], S.view.cx + hw), Math.min(bb[3], S.view.cy + hh));
+      gl.uniform1f(P.upd.u.uStep, 0.22 / sv); gl.uniform1f(P.upd.u.uSeed, seed);
+      gl.bindVertexArray(ps.upd[ps.cur]);
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, ps.bufs[1 - ps.cur]);
+      gl.enable(gl.RASTERIZER_DISCARD); gl.beginTransformFeedback(gl.POINTS); gl.drawArrays(gl.POINTS, 0, ps.n);
+      gl.endTransformFeedback(); gl.disable(gl.RASTERIZER_DISCARD); gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+      // draw segments into the trail buffer
+      gl.useProgram(P.seg.p); gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, W, H); gl.scissor(x, y, w, h);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform4f(P.seg.u.uView, S.view.cx, S.view.cy, S.view.s * DPR, 0); gl.uniform4f(P.seg.u.uRect, x, y, w, h); gl.uniform2f(P.seg.u.uCanvas, W, H);
+      const a = S.param === "wind" ? 0.85 : 0.55; gl.uniform4f(P.seg.u.uC, a, a, a, a);
+      gl.bindVertexArray(ps.seg[ps.cur]); gl.drawArraysInstanced(gl.LINES, 0, 2, ps.n);
+      gl.disable(gl.BLEND);
+      ps.cur = 1 - ps.cur;
+    });
+    trailCur = 1 - trailCur;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.scissor(0, 0, W, H);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(P.blit.p); gl.bindVertexArray(quad); bindTex(0, dst.tex, P.blit.u.uT); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  gl.disable(gl.BLEND); gl.disable(gl.SCISSOR_TEST); gl.bindVertexArray(null);
+  probe(pdata);
+}
+
+// readout at the cursor: render each panel's values into an 8 x 1 target and read back
+const SQRT = new Set(["tp", "swe", "ro"]);
+const RO = [["t2m", (v) => `${(v - 273.15).toFixed(1)} °C`], ["tp", (v) => `${v.toFixed(1)} ${PARAMS.tp.unit}`],
+  ["ws", (v) => `${v.toFixed(1)} m/s`], ["tcc", (v) => `${Math.round(v * 100)} % cloud`],
+  ["swe", (v) => `${v.toFixed(0)} ${PARAMS.swe.unit}`], ["ro", (v) => `${v.toFixed(1)} ${PARAMS.ro.unit}`],
+  ["msl", (v) => `${v.toFixed(1)} hPa`]];
+let probeT = 0;
+function probe(pdata) {
+  const now = performance.now();
+  if (!S.hover) { panels.forEach((p) => (p.ro.textContent = "")); return; }
+  if (now - probeT < 60) return; probeT = now;
+  const enc = S.idx.enc, validT = baseT() + S.lead * 3600;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, probeFB); gl.viewport(0, 0, 8, 1); gl.useProgram(P.probe.p); gl.bindVertexArray(emptyVAO);
+  const px = new Uint8Array(32);
+  const [lat, lon] = gridToLL(S.hover[0], S.hover[1]);
+  panels.forEach((p, i) => {
+    const d = pdata[i]; if (!d || !d.s) { p.ro.textContent = ""; return; }
+    const sf = seriesFor(d.m, validT); setGeo(P.probe, d.m, sf.s, sf.f);
+    gl.uniform2f(P.probe.u.uG, S.hover[0], S.hover[1]);
+    const F = d.s.files;
+    const want = RO.filter(([k]) => F[k]).slice(0, 8);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    want.forEach(([k], j) => {
+      const file = F[k];
+      if (!file) return;
+      const t = atlasTex(d.m.id + "/" + file, k === "msl"); if (!t) return;
+      gl.uniform1f(P.probe.u.uX, j); gl.uniform1i(P.probe.u.uHas, 1); gl.uniform1i(P.probe.u.uWhich, k === "msl" ? 2 : 0);
+      bindTex(0, t, P.probe.u.uF0); bindTex(1, dummy, P.probe.u.uF1); bindTex(2, t, P.probe.u.uM);
+      gl.drawArrays(gl.POINTS, 0, 1);
+    });
+    gl.readPixels(0, 0, 8, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const val = (j) => px[j * 4 + 2] ? (px[j * 4] * 256 + px[j * 4 + 1]) / 65535 : null;
+    const lines = [], tail = [];
+    want.forEach(([k, show], j) => {
+      const r = val(j); if (r == null) return;
+      const e = enc[k], v = SQRT.has(k) ? e[1] * r * r : e[0] + r * (e[1] - e[0]);
+      (k === "msl" ? tail : lines).push(show(v));
+    });
+    // wind: one more pass for v
+    if (F.u10 && F.v10) {
+      const tu = atlasTex(d.m.id + "/" + F.u10), tv = atlasTex(d.m.id + "/" + F.v10);
+      if (tu && tv) {
+        gl.clear(gl.COLOR_BUFFER_BIT); gl.uniform1i(P.probe.u.uWhich, 0);
+        gl.uniform1f(P.probe.u.uX, 0); bindTex(0, tu, P.probe.u.uF0); gl.drawArrays(gl.POINTS, 0, 1);
+        gl.uniform1f(P.probe.u.uX, 1); bindTex(0, tv, P.probe.u.uF0); gl.drawArrays(gl.POINTS, 0, 1);
+        const q = new Uint8Array(8); gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, q);
+        if (q[2] && q[6]) {
+          const u = enc.u10[0] + (q[0] * 256 + q[1]) / 65535 * (enc.u10[1] - enc.u10[0]), v = enc.v10[0] + (q[4] * 256 + q[5]) / 65535 * (enc.v10[1] - enc.v10[0]);
+          const dir = (Math.atan2(-u, -v) / D2R + 360) % 360;
+          lines.push(`${Math.hypot(u, v).toFixed(1)} m/s from ${Math.round(dir).toString().padStart(3, "0")}°`);
+        }
+      }
+    }
+    lines.push(...tail);
+    p.ro.textContent = lines.length ? lines.join("\n") : "";
+  });
+  const lo = ((lon + 540) % 360) - 180;
+  const hdr = `${Math.abs(lat).toFixed(2)}°${lat < 0 ? "S" : "N"} ${Math.abs(lo).toFixed(2)}°${lo < 0 ? "W" : "E"}`;
+  if (panels[0] && panels[0].ro.textContent) panels[0].ro.textContent = hdr + "\n" + panels[0].ro.textContent;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ---------------------------------------------------------------- controls
+function updateTime() {
+  const t = new Date((baseT() + S.lead * 3600) * 1000);
+  $("#valid").textContent = fmt.format(t) + " UTC";
+  $("#leadlbl").textContent = `+${S.lead.toFixed(0).padStart(2, "0")} h · ${META.tzlabel || "NZ"} ${fmtNZ.format(t)}`;
+}
+function ticks() {
+  const el = $("#ticks"); el.innerHTML = ""; const b = baseT();
+  for (let h = 0; h <= HOURS; h += HOURS > 96 ? 24 : 12) {
+    const s = document.createElement("span"); s.style.left = (h / HOURS * 100) + "%";
+    const d = new Date((b + h * 3600) * 1000);
+    s.textContent = d.getUTCHours() === 0 ? `${d.getUTCDate()}/${d.getUTCMonth() + 1}` : `${String(d.getUTCHours()).padStart(2, "0")}Z`;
+    el.appendChild(s);
+  }
+}
+function legend() {
+  const p = PARAMS[S.param]; $("#ltitle").textContent = p.title;
+  const c = $("#cbar"), x = c.getContext("2d"), px = rampPixels(p.stops, 240);
+  const img = x.createImageData(240, 12);
+  for (let i = 0; i < 240; i++) for (let j = 0; j < 12; j++) {
+    const k = (j * 240 + i) * 4, a = px[i * 4 + 3] / 255;
+    const bg = S.param === "tcc" ? [40, 55, 66] : [10, 16, 22];
+    for (let ch = 0; ch < 3; ch++) img.data[k + ch] = px[i * 4 + ch] * a + bg[ch] * (1 - a);
+    img.data[k + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const lab = $("#llab"); lab.innerHTML = "";
+  for (const t of p.ticks) {
+    const f = p.sqrt ? Math.sqrt(t / p.hi) : (t - p.lo) / (p.hi - p.lo);
+    const s = document.createElement("span"); s.style.left = (Math.min(0.97, Math.max(0.03, f)) * 100) + "%"; s.textContent = t; lab.appendChild(s);
+  }
+}
+function pressed(sel, attr, val) { document.querySelectorAll(sel).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(val)))); }
+function paramButtons(ids) {
+  const g = $("#params");
+  for (const id of ids) {
+    const b = document.createElement("button"); b.className = "seg"; b.dataset.param = id; b.textContent = PARAMS[id].label;
+    b.setAttribute("aria-pressed", String(id === S.param)); g.appendChild(b);
+    b.addEventListener("click", () => { S.param = id; pressed("[data-param]", "param", S.param); legend(); S.trailsDirty = true; });
+  }
+}
+document.querySelectorAll("[data-n]").forEach((b) => b.tagName === "BUTTON" && b.addEventListener("click", () => {
+  S.n = +b.dataset.n; pressed("button[data-n]", "n", S.n); buildPanels(); }));
+$("#iso").addEventListener("change", (e) => (S.iso = e.target.checked));
+$("#flow").addEventListener("change", (e) => { S.flow = e.target.checked; S.trailsDirty = true; });
+$("#base").addEventListener("change", (e) => { S.base = e.target.value; ticks(); updateTime(); S.trailsDirty = true; });
+$("#lead").addEventListener("input", (e) => { S.lead = +e.target.value; setPlaying(false); updateTime(); });
+function setPlaying(v) { S.playing = v; $("#play").setAttribute("aria-pressed", String(v)); $("#play").textContent = v ? "❚❚" : "▶"; }
+$("#play").addEventListener("click", () => setPlaying(!S.playing));
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT") return;
+  if (e.key === " ") { e.preventDefault(); setPlaying(!S.playing); }
+  else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); setPlaying(false);
+    S.lead = Math.max(0, Math.min(HOURS, (Math.round(S.lead / STEP) + (e.key === "ArrowRight" ? 1 : -1)) * STEP)); $("#lead").value = S.lead; updateTime(); }
+  else if (e.key === "+" || e.key === "=") zoomAt(null, 1.25); else if (e.key === "-") zoomAt(null, 0.8);
+});
+
+// pan, zoom, pinch, hover: one view shared by all panels
+const ptrs = new Map(); let pinch0 = null;
+function panelAt(cx, cy) {
+  const r = $("#gl").getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
+  return panels.findIndex((p) => x >= p.css.x && x < p.css.x + p.css.w && y >= p.css.y && y < p.css.y + p.css.h);
+}
+function toGrid(cx, cy) {
+  const r = $("#gl").getBoundingClientRect(), i = panelAt(cx, cy); if (i < 0) return null;
+  const p = panels[i], x = cx - r.left - p.css.x - p.css.w / 2, y = cy - r.top - p.css.y - p.css.h / 2;
+  return [S.view.cx + x / S.view.s, S.view.cy - y / S.view.s];
+}
+function zoomAt(c, k) {
+  const g = c ? toGrid(c[0], c[1]) : null;
+  const s1 = Math.min(40, Math.max(0.15, S.view.s * k));
+  if (g) { S.view.cx = g[0] - (g[0] - S.view.cx) * S.view.s / s1; S.view.cy = g[1] - (g[1] - S.view.cy) * S.view.s / s1; }
+  S.view.s = s1; S.trailsDirty = true;
+}
+panelsEl.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt([e.clientX, e.clientY], Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015))); }, { passive: false });
+panelsEl.addEventListener("pointerdown", (e) => {
+  panelsEl.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); panelsEl.classList.add("dragging");
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: S.view.s }; }
+});
+panelsEl.addEventListener("pointermove", (e) => {
+  const prev = ptrs.get(e.pointerId);
+  if (prev) {
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { S.view.cx -= (e.clientX - prev[0]) / S.view.s; S.view.cy += (e.clientY - prev[1]) / S.view.s; S.trailsDirty = true; }
+    else if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      zoomAt([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], pinch0.s * d / pinch0.d / S.view.s); }
+  }
+  if (e.pointerType === "mouse" || ptrs.size <= 1) S.hover = toGrid(e.clientX, e.clientY);
+});
+const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) panelsEl.classList.remove("dragging"); };
+panelsEl.addEventListener("pointerup", endPtr); panelsEl.addEventListener("pointercancel", endPtr);
+panelsEl.addEventListener("pointerleave", () => (S.hover = null));
+panelsEl.addEventListener("dblclick", () => fitView());
+function fitView() {
+  const p = panels[0]; if (!p) return;
+  if (!META.title) { S.view.cx = 425; S.view.cy = 490; S.view.s = Math.min(p.css.w / 560, p.css.h / 640); S.trailsDirty = true; return; }
+  const c = S.idx.lcc; S.view.cx = (c.nx - 1) / 2; S.view.cy = (c.ny - 1) / 2;
+  S.view.s = Math.min(p.css.w / c.nx, p.css.h / c.ny) * 0.98; S.trailsDirty = true;
+}
+
+// ---------------------------------------------------------------- start
+(async function init() {
+  try {
+    S.idx = await (await fetch(DATA + "index.json")).json();
+    META = S.idx.meta || {};
+    for (const [k, v] of Object.entries(META.paramdefs || {})) PARAMS[k] = { ...PARAMS[k], ...v };
+    if (META.tp_unit) PARAMS.tp.unit = META.tp_unit;
+    HOURS = META.hours || 72; STEP = META.step || 6; $("#lead").max = HOURS;
+    if (META.title) { document.title = META.title; $("#brand").textContent = META.title; } else $("#brand").textContent = "NZ Forecast Compare";
+    if (META.credit) $("#credit").textContent = META.credit;
+    if (META.tz) fmtNZ = new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: META.tz, hour12: false });
+    if (META.param) S.param = META.param;
+    if (META.panels) S.panels = [...META.panels];
+    if (META.n) { S.n = META.n; pressed("button[data-n]", "n", S.n); }
+    if (META.iso === false) { S.iso = false; $("#iso").checked = false; }
+    S.speed = 7.2 * HOURS / 72;
+    paramButtons(META.params || ["t2m", "tp", "wind", "tcc"]);
+    const hasF = (f) => S.idx.models.some((m) => m.fields.includes(f));
+    if (!hasF("msl")) { S.iso = false; $("#isochk").style.display = "none"; }
+    if (!hasF("u10")) { S.flow = false; $("#flowchk").style.display = "none"; }
+    lccSetup(S.idx.lcc);
+    for (const m of S.idx.models) { S.models[m.id] = m; m.bb = bbox(m); }
+    for (const [gx, gy, lat, lon] of S.idx.check || []) {
+      const [la, lo] = gridToLL(gx, gy); if (Math.abs(la - lat) > 1e-3 || Math.abs(lo - lon) > 1e-3) console.warn("projection check", gx, gy, la, lo, lat, lon);
+    }
+    const bases = [...new Set(S.idx.models.flatMap((m) => m.series.map((s) => s.key)))].filter((k) => k !== "an").sort();
+    const sel = $("#base");
+    for (const b of bases) { const o = document.createElement("option"); o.value = b;
+      o.textContent = fmt.format(new Date(Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8), +b.slice(8, 10)))) + " UTC"; sel.appendChild(o); }
+    const want = META.base || "2026011912";
+    S.base = bases.includes(want) ? want : bases[0]; sel.value = S.base;
+    $("#sub").textContent = `${S.idx.models.length} models · ${bases.length} runs, ${fmt.format(new Date(baseT() * 1000)).split(",")[0]} week · drag, scroll or pinch to move; space plays`;
+    $("#sub").textContent = `${META.subtitle || "Week of 17–23 Jan 2026"} · ${S.idx.models.length} models · drag or scroll to move, space to play`;
+    buildPanels(); fitView(); ticks(); updateTime(); legend();
+    // overlays
+    const coast = Float32Array.from(await (await fetch(DATA + "coast.json")).json(), (v) => (v === null ? NaN : v)), segs = [];
+    for (let i = 0; i + 3 < coast.length; i += 2) if (!isNaN(coast[i]) && !isNaN(coast[i + 2])) segs.push(coast[i], coast[i + 1], coast[i + 2], coast[i + 3]);
+    coastVAO = lineVAO(segs); coastN = segs.length / 2;
+    const g = [];
+    const G = META.grat || { lat: [-55, -25], lon: [155, 190], step: 5 }, st = G.step;
+    for (let lat = Math.ceil(G.lat[0] / st) * st; lat <= G.lat[1]; lat += st) for (let lon = G.lon[0]; lon < G.lon[1]; lon += 0.5) g.push(...llToGrid(lat, lon), ...llToGrid(lat, lon + 0.5));
+    for (let lon = Math.ceil(G.lon[0] / st) * st; lon <= G.lon[1]; lon += st) for (let lat = G.lat[0]; lat < G.lat[1]; lat += 0.5) g.push(...llToGrid(lat, lon), ...llToGrid(lat + 0.5, lon));
+    gratVAO = lineVAO(g); gratN = g.length / 2;
+    for (const [k, f] of [["shade", "base_shade.webp"], ["land", "base_land.webp"]]) {
+      const bm = await createImageBitmap(await (await fetch(DATA + f)).blob(), { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+      const t = texFrom(bm, gl.RGBA8, gl.RGBA, gl.LINEAR); if (k === "shade") shadeTex = t; else landTex = t;
+    }
+  } catch (err) { console.error(err); $("#sub").textContent = "Could not load the forecast data: " + err.message; }
+})();
+requestAnimationFrame(frame);
+</script>
