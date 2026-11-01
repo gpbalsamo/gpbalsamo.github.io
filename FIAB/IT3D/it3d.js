@@ -111,7 +111,8 @@ void main(){
 function makeTerrain() {
   const nx = TER.nx, ny = TER.ny, n = nx * ny;
   terrainGeo = new THREE.BufferGeometry();
-  const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), land = new Float32Array(n), idx = [];
+  const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), land = new Float32Array(n), idx = new Uint32Array((nx - 1) * (ny - 1) * 6);
+  let q = 0;
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i, fi = i / (nx - 1) * (G.nx - 1), fj = j / (ny - 1) * (G.ny - 1);
     pos[3 * k] = xOf(G.lon0 + fi * G.d);
@@ -119,12 +120,12 @@ function makeTerrain() {
     uv[2 * k] = (fi + 0.5) / G.nx;
     uv[2 * k + 1] = (fj + 0.5) / G.ny;
     land[k] = landT[k];
-    if (i < nx - 1 && j < ny - 1) idx.push(k, k + nx, k + 1, k + 1, k + nx, k + nx + 1);
+    if (i < nx - 1 && j < ny - 1) { idx[q++] = k; idx[q++] = k + nx; idx[q++] = k + 1; idx[q++] = k + 1; idx[q++] = k + nx; idx[q++] = k + nx + 1; }
   }
   terrainGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   terrainGeo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   terrainGeo.setAttribute("land", new THREE.BufferAttribute(land, 1));
-  terrainGeo.setIndex(idx);
+  terrainGeo.setIndex(new THREE.BufferAttribute(idx, 1));
   wxData = new Uint8Array(G.nx * G.ny * 4);
   wxTex = new THREE.DataTexture(wxData, G.nx, G.ny, THREE.RGBAFormat, THREE.UnsignedByteType);
   wxTex.magFilter = wxTex.minFilter = THREE.LinearFilter;
@@ -143,7 +144,7 @@ function makeTerrain() {
 
 function setHeights() {
   const p = terrainGeo.attributes.position.array, e = exag();
-  for (let k = 0; k < terrainH.length; k++) p[3 * k + 1] = (landT[k] > 0.5 ? Math.max(0, terrainH[k]) : 0) / 1000 * e;
+  for (let k = 0; k < terrainH.length; k++) p[3 * k + 1] = Math.max(0, terrainH[k]) / 1000 * e; // water (sea ~0 m, lakes at their surface height)
   terrainGeo.attributes.position.needsUpdate = true;
   terrainGeo.computeVertexNormals();
   terrainGeo.computeBoundingSphere();
