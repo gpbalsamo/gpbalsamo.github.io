@@ -4,7 +4,7 @@
 // model frames every S hours, the hourly values being made here (core.js). Data from build3d.py and terrain3d.py.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as C from "./core.js";
+import * as C from "./core.js?v=202611011700";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "data/";
@@ -21,14 +21,15 @@ const sceneOf = (lat, lon) => { const [fj, fi] = GR.index(lat, lon); return [xOf
 const latlonOf = (x, z) => GR.latlon(jOfZ(z), iOfX(x));
 const exag = () => Number($("exag").value);
 
-// terrain height (m) at scene (x, z), bilinear on the region lattice; NaN outside it
+// terrain height (m) at scene (x, z) as the mesh draws it (linear on its triangles); NaN outside the region lattice
 function terrainAt(x, z) {
   const fi = iOfX(x), fj = jOfZ(z);
   const a = (fi - REG.i0) / (REG.i1 - REG.i0) * (REG.nx - 1), b = (fj - REG.j0) / (REG.j1 - REG.j0) * (REG.ny - 1);
   if (!(a >= 0 && b >= 0 && a <= REG.nx - 1 && b <= REG.ny - 1)) return NaN;
-  const i = Math.min(Math.floor(a), REG.nx - 2), j = Math.min(Math.floor(b), REG.ny - 2), u = a - i, v = b - j, n = REG.nx;
-  const h = (k) => Math.max(0, terrainH[k]);
-  return (h(j * n + i) * (1 - u) + h(j * n + i + 1) * u) * (1 - v) + (h((j + 1) * n + i) * (1 - u) + h((j + 1) * n + i + 1) * u) * v;
+  const i = Math.min(Math.floor(a), REG.nx - 2), j = Math.min(Math.floor(b), REG.ny - 2), U = a - i, V = b - j, n = REG.nx;
+  const h = (k) => Math.max(0, terrainH[k]), k00 = j * n + i, h10 = h(k00 + 1), h01 = h(k00 + n);
+  // the mesh's own triangles: (i,j) (i,j+1) (i+1,j) and (i+1,j) (i,j+1) (i+1,j+1), split along the (i+1,j)-(i,j+1) diagonal
+  return U + V <= 1 ? h(k00) + U * (h10 - h(k00)) + V * (h01 - h(k00)) : h(k00 + n + 1) + (1 - U) * (h01 - h(k00 + n + 1)) + (1 - V) * (h10 - h(k00 + n + 1));
 }
 // model cell (j, i) of a scene point, or null outside the grid
 function cellAt(x, z) {
@@ -596,16 +597,41 @@ function makeLabels() {
     return { el, x, z, y: NaN };
   });
 }
+
+// ---------- town labels behind the terrain ----------
+// A label (an HTML overlay, outside the depth test) is hidden when the displayed terrain rises above the straight line
+// from the camera to its anchor: the line is sampled every half lattice step (heights from terrainAt, the mesh's own
+// triangles) until it climbs above the highest terrain. Checked every 100 ms; labels fade in and out (CSS, 180 ms).
+let topH = 0, topOf = null, occClock = 0;
+function occluded(x, y, z, e, step) {
+  if (topOf !== terrainH) { topOf = terrainH; topH = 0; for (const v of terrainH) if (v > topH) topH = v; }
+  const c = camera.position, dx = c.x - x, dy = c.y - y, dz = c.z - z, top = topH / 1000 * e, tol = 0.05;
+  if (y > top) return false;
+  const n = Math.min(6000, Math.ceil(Math.hypot(dx, dz) / step));
+  for (let s = 1; s < n; s++) {
+    const t = s / n, yy = y + dy * t;
+    if (yy > top) return false;
+    const h = terrainAt(x + dx * t, z + dz * t);
+    if (h / 1000 * e > yy + tol) return true;
+  }
+  return false;
+}
 const tmp = new THREE.Vector3();
-function updateLabels() {
+function updateLabels(now) {
   const on = $("labels").checked, dist = camera.position.distanceTo(controls.target), e = exag();
+  const check = now - occClock > 100, step = 0.5 * Math.min((REG.i1 - REG.i0) * G.kx / (REG.nx - 1), (REG.j1 - REG.j0) * G.kz / (REG.ny - 1));
+  if (check) occClock = now;
   for (const L of labelEls) {
     const y = terrainAt(L.x, L.z);
     if (!on || !Number.isFinite(y)) { L.el.style.display = "none"; continue; }
-    tmp.set(L.x, y / 1000 * e + 0.3, L.z).project(camera);
+    const ya = y / 1000 * e + 0.3;
+    tmp.set(L.x, ya, L.z).project(camera);
     const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
     L.el.style.display = vis ? "block" : "none";
-    if (vis) { L.el.style.left = ((tmp.x + 1) / 2 * innerWidth) + "px"; L.el.style.top = ((1 - tmp.y) / 2 * innerHeight) + "px"; L.el.style.opacity = dist > 1.4 * regSize() ? 0.75 : 1; }
+    if (!vis) continue;
+    if (check) L.occ = occluded(L.x, ya, L.z, e, step);
+    L.el.style.left = ((tmp.x + 1) / 2 * innerWidth) + "px"; L.el.style.top = ((1 - tmp.y) / 2 * innerHeight) + "px";
+    L.el.style.opacity = L.occ ? 0 : dist > 1.4 * regSize() ? 0.75 : 1;
   }
 }
 function searchPlaces() {
@@ -663,7 +689,7 @@ function frame(now) {
   controls.update();
   const dist = camera.position.distanceTo(controls.target);
   camera.near = Math.max(0.2, dist / 2000); camera.far = dist * 20 + 2000; camera.updateProjectionMatrix();
-  if (REG) { stepRibbons(dt); updateLabels(); updateCompass(); }
+  if (REG) { stepRibbons(dt); updateLabels(performance.now()); updateCompass(); }
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

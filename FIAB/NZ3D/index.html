@@ -39,7 +39,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 #compass{right:24px;bottom:132px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0}
 #compass span{display:block;font-weight:700;color:var(--acc);font-size:12px}
 #status{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding:6px 12px;font-size:12px;display:none}
-.lab{position:absolute;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000;pointer-events:none;white-space:nowrap;transform:translate(-50%,-140%)}
+.lab{position:absolute;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000;pointer-events:none;white-space:nowrap;transform:translate(-50%,-140%);transition:opacity .18s}
 .lab:after{content:"";position:absolute;left:50%;top:115%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#fff}
 #mg{left:16px;bottom:128px;width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 160px);overflow:auto;padding:10px 14px;z-index:5;background:#0f1b25f5}
 #mg[hidden]{display:none}#mgHead{cursor:grab;user-select:none;touch-action:none}#mgHead:active{cursor:grabbing}
@@ -111,6 +111,6 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <div id="ends"><span id="t0"></span><span id="interp">hourly frames interpolated</span><span id="t1"></span></div>
 </div>
 
-<script type="module" src="geo3d.js?v=202611011300"></script>
+<script type="module" src="geo3d.js?v=202611011700"></script>
 </body>
 </html>

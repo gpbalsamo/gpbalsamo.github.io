@@ -2,7 +2,7 @@
 // an hourly timeline and a point meteogram. Data from build_it3d.py (meta.json, terrain.png, <model>/<run>_<f>.webp).
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as C from "./core.js";
+import * as C from "./core.js?v=202611011700";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "data/";
@@ -16,13 +16,14 @@ const xOf = (lon) => (lon - LONC) * KX, zOf = (lat) => (LATC - lat) * KY;
 const lonOf = (x) => LONC + x / KX, latOf = (z) => LATC - z / KY;
 const exag = () => Number($("exag").value);
 
-// terrain height (m) at scene (x, z), bilinear on the display terrain; NaN outside
+// terrain height (m) at scene (x, z) as the mesh draws it (linear on its triangles); NaN outside the display terrain
 function terrainAt(x, z) {
   const fi = (lonOf(x) - G.lon0) / G.d / (G.nx - 1) * (TER.nx - 1), fj = (G.lat0 - latOf(z)) / G.d / (G.ny - 1) * (TER.ny - 1);
   if (!(fi >= 0 && fj >= 0 && fi <= TER.nx - 1 && fj <= TER.ny - 1)) return NaN;
-  const i = Math.min(Math.floor(fi), TER.nx - 2), j = Math.min(Math.floor(fj), TER.ny - 2), a = fi - i, b = fj - j, n = TER.nx;
-  const h = (k) => Math.max(0, terrainH[k]);
-  return (h(j * n + i) * (1 - a) + h(j * n + i + 1) * a) * (1 - b) + (h((j + 1) * n + i) * (1 - a) + h((j + 1) * n + i + 1) * a) * b;
+  const i = Math.min(Math.floor(fi), TER.nx - 2), j = Math.min(Math.floor(fj), TER.ny - 2), U = fi - i, V = fj - j, n = TER.nx;
+  const h = (k) => Math.max(0, terrainH[k]), k00 = j * n + i, h10 = h(k00 + 1), h01 = h(k00 + n);
+  // the mesh's own triangles: (i,j) (i,j+1) (i+1,j) and (i+1,j) (i,j+1) (i+1,j+1), split along the (i+1,j)-(i,j+1) diagonal
+  return U + V <= 1 ? h(k00) + U * (h10 - h(k00)) + V * (h01 - h(k00)) : h(k00 + n + 1) + (1 - U) * (h01 - h(k00 + n + 1)) + (1 - V) * (h10 - h(k00 + n + 1));
 }
 // model cell (j, i) of a scene point, or null outside
 function cellAt(x, z) {
@@ -523,15 +524,38 @@ function makeLabels() {
   });
 }
 const tmp = new THREE.Vector3();
-function updateLabels() {
-  const on = $("labels").checked, dist = camera.position.distanceTo(controls.target);
+// ---------- town labels behind the terrain ----------
+// A label (an HTML overlay, outside the depth test) is hidden when the displayed terrain rises above the straight line
+// from the camera to its anchor: the line is sampled every half lattice step (heights from terrainAt, the mesh's own
+// triangles) until it climbs above the highest terrain. Checked every 100 ms; labels fade in and out (CSS, 180 ms).
+let topH = 0, topOf = null, occClock = 0;
+function occluded(x, y, z, e, step) {
+  if (topOf !== terrainH) { topOf = terrainH; topH = 0; for (const v of terrainH) if (v > topH) topH = v; }
+  const c = camera.position, dx = c.x - x, dy = c.y - y, dz = c.z - z, top = topH / 1000 * e, tol = 0.05;
+  if (y > top) return false;
+  const n = Math.min(6000, Math.ceil(Math.hypot(dx, dz) / step));
+  for (let s = 1; s < n; s++) {
+    const t = s / n, yy = y + dy * t;
+    if (yy > top) return false;
+    const h = terrainAt(x + dx * t, z + dz * t);
+    if (h / 1000 * e > yy + tol) return true;
+  }
+  return false;
+}
+function updateLabels(now) {
+  const on = $("labels").checked, dist = camera.position.distanceTo(controls.target), e = exag();
+  const check = now - occClock > 100, step = 0.5 * Math.min((G.nx - 1) * G.d * KX / (TER.nx - 1), (G.ny - 1) * G.d * KY / (TER.ny - 1));
+  if (check) occClock = now;
   for (const L of labelEls) {
     if (!on) { L.el.style.display = "none"; continue; }
-    const y = terrainAt(L.x, L.z) / 1000 * exag();
-    tmp.set(L.x, (Number.isFinite(y) ? y : 0) + 0.3, L.z).project(camera);
+    const y = terrainAt(L.x, L.z) / 1000 * e, ya = (Number.isFinite(y) ? y : 0) + 0.3;
+    tmp.set(L.x, ya, L.z).project(camera);
     const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
     L.el.style.display = vis ? "block" : "none";
-    if (vis) { L.el.style.left = ((tmp.x + 1) / 2 * innerWidth) + "px"; L.el.style.top = ((1 - tmp.y) / 2 * innerHeight) + "px"; L.el.style.opacity = dist > 1400 ? 0.75 : 1; }
+    if (!vis) continue;
+    if (check) L.occ = occluded(L.x, ya, L.z, e, step);
+    L.el.style.left = ((tmp.x + 1) / 2 * innerWidth) + "px"; L.el.style.top = ((1 - tmp.y) / 2 * innerHeight) + "px";
+    L.el.style.opacity = L.occ ? 0 : dist > 1400 ? 0.75 : 1;
   }
 }
 function searchPlaces() {
@@ -584,7 +608,7 @@ function frame(now) {
   }
   controls.update();
   stepRibbons(dt);
-  updateLabels();
+  updateLabels(now);
   updateCompass();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -629,14 +653,15 @@ async function main() {
   makeLabels();
   for (const m of M.models) $("model").append(new Option(m.name, m.id));
   const fillRuns = () => {
-    const md = M.models.find((m) => m.id === $("model").value), cur = $("run").value || "2026062900";
+    const md = M.models.find((m) => m.id === $("model").value), cur = $("run").value || M.defaultRun || "2026062900";
     $("run").replaceChildren(...md.runs.map((r) => new Option(FMTUTC(r.t0 * 1000) + " (" + DFMT.format(new Date(r.t0 * 1000)) + ")", r.key)));
     $("run").value = md.runs.some((r) => r.key === cur) ? cur : md.runs[0].key;
   };
   fillRuns();
-  $("run").value = "2026062900";
+  const first = M.defaultRun || "2026062900";  // the latest run on the live pages (meta.defaultRun)
   model = M.models[0];
-  run = model.runs.find((r) => r.key === "2026062900") || model.runs[0];
+  run = model.runs.find((r) => r.key === first) || model.runs[model.runs.length - 1];
+  $("run").value = run.key;
   hour = run.peak || 0;
   $("t0").textContent = "+0 h";
   $("t1").textContent = `+${M.frames - 1} h`;

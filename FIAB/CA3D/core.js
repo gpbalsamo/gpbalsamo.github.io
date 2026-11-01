@@ -154,11 +154,17 @@ export function pchipAt(a, nt, S, h) {
 export function hourlyPr(P, nt, S, h) {
   if (h <= 0) return 0;
   const k = Math.min(Math.ceil(h / S), nt - 1), tot = P(k);
+  return prOfHour(tot, k > 1 ? P(k - 1) : tot, k < nt - 1 ? P(k + 1) : tot, S, h - (k - 1) * S);
+}
+// the same for one cell given the window total, the totals of the windows before and after (the window's own total
+// where there is none) and the hour m = 1..S within the window
+export function prOfHour(tot, prev, next, S, m) {
   if (!(tot > 0)) return 0;
-  const r = tot / S, rp = k > 1 ? P(k - 1) / S : r, rn = k < nt - 1 ? P(k + 1) / S : r;
-  const rate = (m) => { const c = m - 0.5; return c < S / 2 ? rp + (r - rp) * (c + S / 2) / S : r + (rn - r) * (c - S / 2) / S; };
-  let s = 0;
-  for (let m = 1; m <= S; m++) s += Math.max(rate(m), 0);
-  const m = h - (k - 1) * S;
-  return s > 0 ? tot * Math.max(rate(m), 0) / s : tot / S;
+  const r = tot / S, rp = prev / S, rn = next / S;
+  let s = 0, rm = 0;
+  for (let q = 1; q <= S; q++) {
+    const c = q - 0.5, x = Math.max(c < S / 2 ? rp + (r - rp) * (c + S / 2) / S : r + (rn - r) * (c - S / 2) / S, 0);
+    s += x; if (q === m) rm = x;
+  }
+  return s > 0 ? tot * rm / s : tot / S;
 }
