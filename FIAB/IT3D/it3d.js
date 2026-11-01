@@ -31,12 +31,13 @@ function cellAt(x, z) {
 }
 
 // ---------- three.js scene ----------
-if (!document.createElement("canvas").getContext("webgl2")) {
-  $("status").textContent = "This page needs WebGL2, which this browser does not offer.";
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) {
+  $("status").textContent = "This page needs WebGL2 (3D graphics), which this browser could not start: try another browser or enable hardware acceleration.";
   $("status").style.display = "block";
-  throw Error("no WebGL2");
+  throw e;
 }
-const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 $("scene").append(renderer.domElement);

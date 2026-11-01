@@ -37,12 +37,13 @@ function cellAt(x, z) {
 }
 
 // ---------- three.js scene ----------
-if (!document.createElement("canvas").getContext("webgl2")) {
-  $("status").textContent = "This page needs WebGL2, which this browser does not offer.";
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) {
+  $("status").textContent = "This page needs WebGL2 (3D graphics), which this browser could not start: try another browser or enable hardware acceleration.";
   $("status").style.display = "block";
-  throw Error("no WebGL2");
+  throw e;
 }
-const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 $("scene").append(renderer.domElement);
@@ -715,6 +716,7 @@ async function main() {
     COVER = new Uint8Array(N);
     for (let k = 0; k < N; k++) COVER[k] = im.rgba[4 * k] > 127 ? 1 : 0;
   }
+  REG = M.terrain.regions[0]; // the trails are seeded over the first region before its terrain loads
   makeRibbons();
   makeLabels();
   for (const r of M.terrain.regions) $("view").append(new Option(r.name, r.id));
