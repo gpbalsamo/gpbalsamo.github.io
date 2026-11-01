@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>California in 3D · FIAB</title>
+<meta name="theme-color" content="#0d1820">
+<style>
+:root{color-scheme:dark;--ink:#e9eef2;--ink2:#a9b8c3;--ink3:#7f909c;--acc:#f0b44c;--card:#101d27e6;--line:#ffffff1f;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:#0d1820}
+*{box-sizing:border-box}body{margin:0;overflow:hidden}
+#scene{position:fixed;inset:0}#scene canvas{display:block}
+.card{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);box-shadow:0 8px 30px #0006}
+#intro{left:16px;top:16px;width:340px;padding:14px 16px}
+#intro .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:700}
+#intro h1{margin:4px 0 4px;font-size:22px;letter-spacing:-.01em}
+#intro p{margin:4px 0;color:var(--ink2);font-size:12.5px}
+#intro .warn{color:#f3cf8a}
+#intro a{color:#9fd0f0}
+details{margin-top:8px;font-size:12px;color:var(--ink2)}details summary{cursor:pointer;color:#9fd0f0}details p{margin:6px 0}
+details[open]{max-height:45vh;overflow:auto}
+#ctrl{right:16px;top:16px;width:250px;padding:12px 14px;max-height:calc(100vh - 150px);overflow:auto}
+label.l{display:block;font-size:12px;color:var(--ink2);margin:10px 0 4px}label.l:first-child{margin-top:0}
+select,button,input[type=search]{font:inherit;color:var(--ink);background:#1a2c39;border:1px solid #ffffff2a;border-radius:7px;padding:6px 8px}
+select,input[type=search]{width:100%}button{cursor:pointer}button:hover{background:#24404f}button:disabled{opacity:.4;cursor:default}
+button.on{background:#7a5414;border-color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.row{display:flex;gap:6px;align-items:center}.row>*{flex:1}
+.chk{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);margin-top:8px}
+#matches button{display:block;width:100%;text-align:left;margin-top:3px;font-size:12px;padding:5px 8px}
+.leg{margin-top:12px;font-size:11.5px;color:var(--ink2)}
+.bar{height:8px;border-radius:4px;margin:3px 0 2px}.ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--ink3)}
+.bands{display:flex;gap:2px;margin-top:4px}.bands span{flex:1;text-align:center;font-size:10px;color:#111;border-radius:3px;padding:2px 0}
+#time{left:16px;right:16px;bottom:16px;max-width:1080px;margin:auto;padding:10px 14px}
+#time .row{flex-wrap:wrap}#time .row>*{flex:0 0 auto}#when{font-size:17px;font-weight:600;margin-left:6px}#lead{margin-left:auto;color:var(--ink2);font-size:12px}
+#hour{margin:8px 0 2px}#ends{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3)}
+#interp{font-size:11px;color:var(--ink3)}
+#info{left:16px;bottom:128px;width:300px;padding:10px 14px;font-size:12.5px}
+#info b{color:var(--ink)}#info .k{color:var(--ink2)}
+#compass{right:24px;bottom:132px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0}
+#compass span{display:block;font-weight:700;color:var(--acc);font-size:12px}
+#status{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding:6px 12px;font-size:12px;display:none}
+.lab{position:absolute;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000;pointer-events:none;white-space:nowrap;transform:translate(-50%,-140%)}
+.lab:after{content:"";position:absolute;left:50%;top:115%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#fff}
+#mg{left:16px;bottom:128px;width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 160px);overflow:auto;padding:10px 14px;z-index:5;background:#0f1b25f5}
+#mg[hidden]{display:none}#mgHead{cursor:grab;user-select:none;touch-action:none}#mgHead:active{cursor:grabbing}
+#mgClose{float:right;font-size:16px;padding:0 9px}#mgPlace{font-weight:700;font-size:15px}#mgSub{font-size:12px;color:var(--ink2)}
+#mgNote{font-size:11px;color:var(--ink3);margin-top:4px}svg.ch{display:block;width:100%;cursor:crosshair}
+@media (max-width:760px){#intro{width:calc(100vw - 32px);max-height:30vh;overflow:auto}#intro p.long{display:none}#ctrl{top:auto;bottom:140px;width:200px;max-height:40vh}#info{display:none}#compass{display:none}#when{font-size:14px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="scene" aria-label="Interactive 3D view of the terrain of California with reanalysis weather"></div>
+
+<header id="intro" class="card">
+  <div class="kicker">FIAB · California · preview in 3D</div>
+  <h1>Atmospheric rivers over the Sierra</h1>
+  <p class="long">The terrain of California with rain, snow and surface wind, hour by hour, during the atmospheric rivers of 3–10 January 2023 — from the CONUS404 reanalysis, not a forecast. This is the 2.5 km grid where the CA-BRIS forecasts will come.</p>
+  <p class="warn">Preview · reanalysis demonstration, forecasts to come · not official guidance</p>
+  <p>Drag to orbit · scroll to zoom · right-drag or shift-drag to pan · click to inspect · double-click to focus</p>
+  <p><a href="../CA/">2D land viewer</a> · <a href="../">FIAB home</a></p>
+  <details>
+    <summary>About, data and limitations</summary>
+<p><b>Data.</b> CONUS404-BA (USGS HyTEST / NCAR: WRF at 4 km over the contiguous US, nudged to ERA5, bias-adjusted), as the 2.5 km CALIFE forcing of ecLand, taken to the CA-BRIS 2.5 km Lambert grid; 3-hourly frames. It is a <b>reanalysis, not a forecast</b>. The data cover 32.5–42°N, 124.5–114°W: outside that box the terrain is shown without weather. The CA-BRIS forecasts (BRIS fine-tuned on CONUS404 over California) will be added here as a model.</p>
+<p><b>Hourly frames are interpolated</b> from the 3-hourly data: temperature, dewpoint and snow level with a monotone cubic Hermite curve, wind and cloud linearly; precipitation is spread over each 3 h window so that the hourly amounts add up exactly to the 3 h total. Hour h shows the precipitation of the hour ending at h.</p>
+<p><b>Rain or snow</b>: CONUS404's own rain and snow. <b>Snow level</b> (readout and meteogram) is approximate: the height of the 0 °C wet-bulb from the 2 m temperature and humidity with a 6.5 K/km lapse rate (no upper air in these data). Amounts are water equivalent, not snow depth. No cloud cover in these data.</p>
+<p><b>Terrain</b> is the IFS TCo7999 climate orography (about 1.3 km; the whole-domain view is coarser, the regions under “Explore” are at about 1.25 km), vertically exaggerated. The weather is on the model cells (2.5 km), so the relief and the snow line painted on it are finer than the weather. Snow is painted where the terrain is above the snow level of the hour. Wind trails show the 10 m wind over the surface, not three-dimensional trajectories.</p>
+<p>CONUS404: USGS HyTEST and NCAR (Rasmussen et al. 2023). Contains modified ECMWF data © ECMWF, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (<a href="https://apps.ecmwf.int/datasets/licences/general/" target="_blank" rel="noopener">ECMWF terms</a>). Times are California local time. Built with <a href="https://github.com/ecmwf/forecast-in-a-box" target="_blank" rel="noopener">Forecast-in-a-Box</a> and <a href="https://github.com/ecmwf/anemoi-core" target="_blank" rel="noopener">anemoi</a>; rendering with <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT). The idea of a 3D terrain explorer follows Neil Gordon's BRIS NZ “weather in three dimensions” demonstration; this page is independent code.</p>
+<p>Provided as is, without any guarantee. For official forecasts and warnings consult the <a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service</a>. Place coordinates are approximate.</p>
+  </details>
+</header>
+
+<aside id="ctrl" class="card">
+  <label class="l" for="model">Model</label><select id="model"></select>
+  <label class="l" for="run">Period</label><select id="run"></select>
+  <label class="l" for="view">Explore</label>
+  <select id="view"></select>
+  <label class="l" for="exag">Terrain height <b id="exagV">8×</b></label><input id="exag" type="range" min="1" max="15" step="0.5" value="8">
+  <label class="l" for="spd">Wind trail speed</label><input id="spd" type="range" min="0.2" max="3" step="0.1" value="1">
+  <div class="chk"><input type="checkbox" id="trails" checked><label for="trails">Wind trails</label>
+    <input type="checkbox" id="labels" checked><label for="labels">Places</label></div>
+  <button id="reset" style="width:100%;margin-top:10px">Reset view</button>
+  <label class="l" for="q">Find a place</label><input id="q" type="search" placeholder="Town…" autocomplete="off">
+  <div id="matches"></div>
+  <div class="leg"><b>Precipitation</b> · mm in the hour
+    <div style="margin-top:4px">Rain</div><div class="bar" id="barRain"></div>
+    <div class="ticks"><span>0.1</span><span>0.5</span><span>2</span><span>5</span><span>10</span><span>20</span><span>40+</span></div>
+    <div style="margin-top:4px">Snow (water equivalent)</div><div class="bar" id="barSnow"></div>
+    <div class="ticks"><span>0.1</span><span>1</span><span>5</span><span>20+</span></div>
+    <div style="margin-top:8px"><b>Wind trails</b> · 10 m wind, km/h · wider = faster</div>
+    <div class="bands" id="bands"></div>
+  </div>
+</aside>
+
+<div id="compass" class="card" title="North"><span id="needle">▲<br>N</span></div>
+<div id="status" class="card"></div>
+<div id="info" class="card">Click the landscape to inspect the forecast.</div>
+<div id="labs"></div>
+
+<section id="mg" class="card" hidden aria-label="Point forecast">
+  <div id="mgHead"><button id="mgClose" aria-label="Close">×</button>
+    <div id="mgPlace"></div><div id="mgSub"></div></div>
+  <div id="mgCharts"></div>
+  <div id="mgNote"></div>
+</section>
+
+<div id="time" class="card">
+  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" title="Hour with the most precipitation over land">Peak rain</button>
+    <span id="when"></span><span id="lead"></span></div>
+  <input id="hour" type="range" min="0" max="72" value="0" aria-label="Hour">
+  <div id="ends"><span id="t0"></span><span id="interp">hourly frames interpolated</span><span id="t1"></span></div>
+</div>
+
+<script type="module" src="geo3d.js?v=202611010330"></script>
+</body>
+</html>
