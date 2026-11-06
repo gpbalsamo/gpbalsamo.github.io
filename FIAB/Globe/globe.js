@@ -3,7 +3,7 @@
 // labels, a point forecast, shareable views and a hide-controls mode. Data from build_globe.py (data/).
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as C from "./core.js?v=202611060031";
+import * as C from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const DEBUG = location.search.includes("debug") ? {} : null;
@@ -488,7 +488,7 @@ function status(t) { $("status").textContent = t; $("status").style.display = t 
 async function main() {
   status("Loading the forecast…");
   try {
-    M = await fetch(DATA + "meta.json").then((r) => r.json());
+    M = await fetch(DATA + "meta.json", { cache: "no-cache" }).then((r) => r.json());
     const [ia, ib, io] = await Promise.all(["wx_a.png", "wx_b.png", "orog.png"].map((n) => loadImage(DATA + n + "?v=" + M.run)));
     NX = M.grid.nx; NY = M.grid.ny; COLS = M.grid.cols; NS = M.steps.length; HMAX = M.steps.at(-1);
     WA = pixels(ia); WB = pixels(ib); OR = pixels(io);
