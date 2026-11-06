@@ -4,7 +4,7 @@
 // model frames every S hours, the hourly values being made here (core.js). Data from build3d.py and terrain3d.py.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as C from "./core.js?v=202611011700";
+import * as C from "./core.js?v=202611060031";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "data/";
@@ -242,7 +242,10 @@ function stepRibbons(dt) {
   if (record) histClock = 0;
   const A = ribGeo.attributes.a.array, B = ribGeo.attributes.b.array, Cc = ribGeo.attributes.c.array, Wd = ribGeo.attributes.w.array;
   let s = 0;
-  for (const p of particles) {
+  const nAct = Math.round(NP * Number($("dens").value));
+  for (let ip = 0; ip < NP; ip++) {
+    const p = particles[ip];
+    if (ip >= nAct) { for (let q = 0; q < NL - 1; q++, s++) Wd[s] = 0; continue; }
     p.age += dt;
     const w = windAt(p.x, p.z);
     if (!w || p.age > p.life || !Number.isFinite(terrainAt(p.x, p.z))) spawn(p, false);
@@ -353,6 +356,7 @@ function showHour() {
   wxTex.needsUpdate = true;
   terrainMesh.material.uniforms.uHaveWx.value = 1;
   const t = run.t0 * 1000 + h * 3600000;
+  $("now").disabled = nowHour() === null;
   $("when").textContent = FMT.format(new Date(t)) + " " + zoneName(t);
   $("lead").textContent = (model.kind === "analysis" ? `${model.name}` : `+${h + (run.off || 0)} h · ${model.name}, start ${FMTUTC(startMs())}`);
   $("hour").value = h;
@@ -664,6 +668,50 @@ function updateCompass() {
   $("needle").style.transform = `rotate(${ang}rad)`;
 }
 
+// ---------- hide controls, now, share ----------
+function nowHour() {
+  if (!run || model.kind === "analysis") return null;
+  const h = Math.round((Date.now() - run.t0 * 1000) / 3600000);
+  return h >= 0 && h <= HMAX ? h : null;
+}
+function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(toast.k); toast.k = setTimeout(() => { e.style.display = "none"; }, 2500); }
+function toggleBare(on) {
+  const bare = document.body.classList.toggle("bare", on);
+  $("hide").textContent = bare ? "Show controls" : "Hide controls";
+  for (const L of labelEls) L.y = NaN;
+}
+const r1 = (v) => Math.round(v * 10) / 10;
+function viewHash() {
+  const q = new URLSearchParams();
+  q.set("m", model.id); q.set("r", run.key); q.set("h", hour); q.set("v", REG.id);
+  q.set("cam", [...camera.position.toArray(), ...controls.target.toArray()].map(r1).join(","));
+  if (selected) q.set("p", `${selected.lat.toFixed(3)},${selected.lon.toFixed(3)}`);
+  if (document.body.classList.contains("bare")) q.set("bare", 1);
+  return q.toString();
+}
+async function share() {
+  const url = location.href.split("#")[0] + "#" + viewHash();
+  history.replaceState(null, "", url);
+  try { await navigator.clipboard.writeText(url); toast("Link to this view copied"); }
+  catch (e) { toast("Link in the address bar: copy it from there"); }
+}
+async function applyHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.has("v") && M.terrain.regions.some((r) => r.id === q.get("v")) && q.get("v") !== REG.id) { $("view").value = q.get("v"); await loadRegion(q.get("v"), true); }
+  const md = M.models.find((m) => m.id === q.get("m"));
+  if (md) {
+    $("model").value = md.id; $("model").onchange_fill();
+    if (md.runs.some((r) => r.key === q.get("r"))) $("run").value = q.get("r");
+    if (q.has("h")) hour = Number(q.get("h")) || 0;
+    await selectRun();
+  } else if (q.has("h")) setHour(Number(q.get("h")) || 0);
+  const cam = (q.get("cam") || "").split(",").map(Number);
+  if (cam.length === 6 && cam.every(Number.isFinite)) { camera.position.set(cam[0], cam[1], cam[2]); controls.target.set(cam[3], cam[4], cam[5]); controls.update(); }
+  const pt = (q.get("p") || "").split(",").map(Number);
+  if (pt.length === 2 && pt.every(Number.isFinite)) { const [x, z] = sceneOf(pt[0], pt[1]); select(x, z); }
+  if (q.get("bare") === "1") toggleBare(true);
+}
+
 // ---------- timeline ----------
 function setHour(h) { hour = Math.max(0, Math.min(HMAX, h)); showHour(); }
 function togglePlay(on) {
@@ -704,6 +752,7 @@ addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
   if (e.target.tagName === "SELECT") return;
   if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  if (e.key === "h" || e.key === "H") toggleBare();
   if (e.key === "," || e.key === "[") setHour(hour - 1);
   if (e.key === "." || e.key === "]") setHour(hour + 1);
 });
@@ -751,7 +800,11 @@ async function main() {
   model = M.models.find((m) => m.id === $("model").value);
   run = model.runs.find((r) => r.key === $("run").value) || model.runs[0];
   hour = run.peak || 0;
+  $("model").onchange_fill = fillRuns;
   $("model").onchange = () => { fillRuns(); selectRun(); };
+  $("now").onclick = () => { const h = nowHour(); if (h !== null) setHour(h); };
+  $("hide").onclick = () => toggleBare();
+  $("share").onclick = share;
   $("run").onchange = selectRun;
   $("hour").oninput = () => setHour(Number($("hour").value));
   $("prev").onclick = () => setHour(hour - 1);
@@ -764,5 +817,6 @@ async function main() {
   $("q").oninput = searchPlaces;
   requestAnimationFrame(frame);
   await selectRun();
+  await applyHash();
 }
 main();

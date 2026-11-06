@@ -44,7 +44,11 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 #mg{left:16px;bottom:128px;width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 160px);overflow:auto;padding:10px 14px;z-index:5;background:#0f1b25f5}
 #mg[hidden]{display:none}#mgHead{cursor:grab;user-select:none;touch-action:none}#mgHead:active{cursor:grabbing}
 #mgClose{float:right;font-size:16px;padding:0 9px}#mgPlace{font-weight:700;font-size:15px}#mgSub{font-size:12px;color:var(--ink2)}
-#mgNote{font-size:11px;color:var(--ink3);margin-top:4px}svg.ch{display:block;width:100%;cursor:crosshair}
+#mgNote{font-size:11px;color:var(--ink3);margin-top:4px}
+#mg{resize:both;min-width:280px;min-height:160px}
+body.bare #intro,body.bare #ctrl,body.bare #info,body.bare #compass,body.bare #ends,body.bare #hour,body.bare #time .opt{display:none}
+body.bare #time{left:auto;right:16px;max-width:none;width:auto}
+#toast{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);padding:6px 12px;font-size:12px;display:none;z-index:9}svg.ch{display:block;width:100%;cursor:crosshair}
 @media (max-width:760px){#intro{width:calc(100vw - 32px);max-height:30vh;overflow:auto}#intro p.long{display:none}#ctrl{top:auto;bottom:140px;width:200px;max-height:40vh}#info{display:none}#compass{display:none}#when{font-size:14px}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
@@ -57,7 +61,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <h1>Atmospheric rivers over the Sierra</h1>
   <p class="long">The terrain of California with rain, snow and surface wind, hour by hour, during the atmospheric rivers of 3–10 January 2023 — from the CONUS404 reanalysis, not a forecast. This is the 2.5 km grid where the CA-BRIS forecasts will come.</p>
   <p class="warn">Preview · reanalysis demonstration, forecasts to come · not official guidance</p>
-  <p>Drag to orbit · scroll to zoom · right-drag or shift-drag to pan · click to inspect · double-click to focus</p>
+  <p>Drag to orbit · scroll to zoom · right-drag or shift-drag to pan · click to inspect · double-click to focus · H hides the panels</p>
   <p><a href="../CA/">2D land viewer</a> · <a href="../">FIAB home</a></p>
   <details>
     <summary>About, data and limitations</summary>
@@ -77,9 +81,10 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <select id="view"></select>
   <label class="l" for="exag">Terrain height <b id="exagV">8×</b></label><input id="exag" type="range" min="1" max="15" step="0.5" value="8">
   <label class="l" for="spd">Wind trail speed</label><input id="spd" type="range" min="0.2" max="3" step="0.1" value="1">
+  <label class="l" for="dens">Wind trail density</label><select id="dens"><option value="0.33">Sparse</option><option value="0.67" selected>Normal</option><option value="1">Dense</option></select>
   <div class="chk"><input type="checkbox" id="trails" checked><label for="trails">Wind trails</label>
     <input type="checkbox" id="labels" checked><label for="labels">Places</label></div>
-  <button id="reset" style="width:100%;margin-top:10px">Reset view</button>
+  <div class="row" style="margin-top:10px"><button id="reset">Reset view</button><button id="share" title="Copy a link to this view (place, time, camera)">Share view</button></div>
   <label class="l" for="q">Find a place</label><input id="q" type="search" placeholder="Town…" autocomplete="off">
   <div id="matches"></div>
   <div class="leg"><b>Precipitation</b> · mm in the hour
@@ -94,6 +99,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 
 <div id="compass" class="card" title="North"><span id="needle">▲<br>N</span></div>
 <div id="status" class="card"></div>
+<div id="toast" class="card"></div>
 <div id="info" class="card">Click the landscape to inspect the forecast.</div>
 <div id="labs"></div>
 
@@ -105,12 +111,12 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 </section>
 
 <div id="time" class="card">
-  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" title="Hour with the most precipitation over land">Peak rain</button>
+  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" class="opt" title="Hour with the most precipitation over land">Peak rain</button><button id="now" class="opt" title="The current hour, when it is inside the forecast">Now</button><button id="hide" title="Hide or show the panels (key H)">Hide controls</button>
     <span id="when"></span><span id="lead"></span></div>
   <input id="hour" type="range" min="0" max="72" value="0" aria-label="Hour">
   <div id="ends"><span id="t0"></span><span id="interp">hourly frames interpolated</span><span id="t1"></span></div>
 </div>
 
-<script type="module" src="geo3d.js?v=202611011700"></script>
+<script type="module" src="geo3d.js?v=202611060031"></script>
 </body>
 </html>

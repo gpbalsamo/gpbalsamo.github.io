@@ -2,7 +2,7 @@
 // an hourly timeline and a point meteogram. Data from build_it3d.py (meta.json, terrain.png, <model>/<run>_<f>.webp).
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as C from "./core.js?v=202611011700";
+import * as C from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "data/";
@@ -228,7 +228,10 @@ function stepRibbons(dt) {
   if (record) histClock = 0;
   const A = ribGeo.attributes.a.array, B = ribGeo.attributes.b.array, Cc = ribGeo.attributes.c.array, Wd = ribGeo.attributes.w.array;
   let s = 0;
-  for (const p of particles) {
+  const nAct = Math.round(NP * Number($("dens").value));
+  for (let ip = 0; ip < NP; ip++) {
+    const p = particles[ip];
+    if (ip >= nAct) { for (let q = 0; q < NL - 1; q++, s++) Wd[s] = 0; continue; }
     p.age += dt;
     const w = windAt(p.x, p.z);
     if (!w || p.age > p.life) { spawn(p, W, H, false); }
@@ -306,6 +309,7 @@ function showHour() {
   uField = new Float32Array(n); vField = new Float32Array(n);
   for (let k = 0; k < n; k++) { uField[k] = DEC.u[u[o + k]]; vField[k] = DEC.v[v[o + k]]; }
   const t = run.t0 * 1000 + hour * 3600000;
+  $("now").disabled = nowHour() === null;
   $("when").textContent = FMT.format(new Date(t)) + " " + zoneName(t);
   $("lead").textContent = `+${hour} h · ${model.name}, start ${FMTUTC(run.t0 * 1000)}`;
   $("hour").value = hour;
@@ -623,6 +627,7 @@ addEventListener("resize", () => {
 addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
   if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  if (e.key === "h" || e.key === "H") toggleBare();
   if (e.key === "," || e.key === "[") setHour(hour - 1);
   if (e.key === "." || e.key === "]") setHour(hour + 1);
 });
@@ -665,7 +670,11 @@ async function main() {
   hour = run.peak || 0;
   $("t0").textContent = "+0 h";
   $("t1").textContent = `+${M.frames - 1} h`;
+  $("model").onchange_fill = fillRuns;
   $("model").onchange = () => { fillRuns(); selectRun(); };
+  $("now").onclick = () => { const h = nowHour(); if (h !== null) setHour(h); };
+  $("hide").onclick = () => toggleBare();
+  $("share").onclick = share;
   $("run").onchange = selectRun;
   $("hour").oninput = () => setHour(Number($("hour").value));
   $("prev").onclick = () => setHour(hour - 1);
@@ -679,6 +688,50 @@ async function main() {
   setView("all", true);
   requestAnimationFrame(frame);
   await selectRun();
+  await applyHash();
+}
+
+// ---------- hide controls, now, share ----------
+function nowHour() {
+  if (!run) return null;
+  const h = Math.round((Date.now() - run.t0 * 1000) / 3600000);
+  return h >= 0 && h <= M.frames - 1 ? h : null;
+}
+function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(toast.k); toast.k = setTimeout(() => { e.style.display = "none"; }, 2500); }
+function toggleBare(on) {
+  const bare = document.body.classList.toggle("bare", on);
+  $("hide").textContent = bare ? "Show controls" : "Hide controls";
+}
+const r1 = (v) => Math.round(v * 10) / 10;
+function viewHash() {
+  const q = new URLSearchParams();
+  q.set("m", model.id); q.set("r", run.key); q.set("h", hour); q.set("v", $("view").value);
+  q.set("cam", [...camera.position.toArray(), ...controls.target.toArray()].map(r1).join(","));
+  if (selected) q.set("p", `${selected.lat.toFixed(3)},${selected.lon.toFixed(3)}`);
+  if (document.body.classList.contains("bare")) q.set("bare", 1);
+  return q.toString();
+}
+async function share() {
+  const url = location.href.split("#")[0] + "#" + viewHash();
+  history.replaceState(null, "", url);
+  try { await navigator.clipboard.writeText(url); toast("Link to this view copied"); }
+  catch (e) { toast("Link in the address bar: copy it from there"); }
+}
+async function applyHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.has("v") && [...$("view").options].some((o) => o.value === q.get("v"))) { $("view").value = q.get("v"); setView(q.get("v"), true); }
+  const md = M.models.find((m) => m.id === q.get("m"));
+  if (md) {
+    $("model").value = md.id; $("model").onchange_fill();
+    if (md.runs.some((r) => r.key === q.get("r"))) $("run").value = q.get("r");
+    if (q.has("h")) hour = Number(q.get("h")) || 0;
+    await selectRun();
+  } else if (q.has("h")) setHour(Number(q.get("h")) || 0);
+  const cam = (q.get("cam") || "").split(",").map(Number);
+  if (cam.length === 6 && cam.every(Number.isFinite)) { fly = null; camera.position.set(cam[0], cam[1], cam[2]); controls.target.set(cam[3], cam[4], cam[5]); controls.update(); }
+  const pt = (q.get("p") || "").split(",").map(Number);
+  if (pt.length === 2 && pt.every(Number.isFinite)) select(xOf(pt[1]), zOf(pt[0]));
+  if (q.get("bare") === "1") toggleBare(true);
 }
 
 main();
