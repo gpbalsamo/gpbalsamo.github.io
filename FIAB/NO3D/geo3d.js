@@ -250,6 +250,7 @@ function setHeights() {
   terrainMesh.material.uniforms.uScale.value = e;
   for (const t of demTiles.values()) if (t.mesh) demHeights(t, e);
   for (const t of bldTiles.values()) if (t.mesh) bldHeights(t, e);
+  for (const L of LMK) lmkHeights(L, e);
   $("exagV").textContent = e + "×";
   for (const q of particles || []) q.hist.length = 0;
   placeMarker();
@@ -392,40 +393,109 @@ function bldHeights(t, e) {
   t.mesh.geometry.computeBoundingSphere();
 }
 async function loadBldTile(tj, ti) {
-  const key = tj + "_" + ti, t = { mesh: null, used: performance.now(), n: 0 };
+  // typed arrays sized from a first pass over the records (an iPhone tab dies on JS arrays of millions of vertices);
+  // indexed: roof rings share their vertices, each wall is one quad of 4 vertices with its own flat normal
+  const key = tj + "_" + ti, t = { mesh: null, used: performance.now(), n: 0, nv: 0 };
   bldTiles.set(key, t);
   bldLoading++;
   try {
     const r = await fetch(`${BLDDIR}${key}.bin`);
     if (!r.ok) throw new Error(r.status);
     const a = new Int16Array(await r.arrayBuffer()), T = BLD.T, Q = BLD.q;
-    const X = (q) => xOfI(ti * T + q / Q * T), Z = (q) => zOfJ(tj * T + q / Q * T);
-    const pos = [], b = [], rr = [];
-    const put = (v, base, rel) => { pos.push(v.x, 0, v.y); b.push(base); rr.push(rel); };
-    let p = 0;
-    while (p < a.length) {
+    let nv = 0, ni = 0;
+    for (let p = 0; p < a.length;) {
+      const nr = a[p + 2]; let L = 0;
+      for (let k = 0; k < nr; k++) L += a[p + 3 + k];
+      nv += 5 * L; ni += 6 * L + 3 * (L - 2 + 2 * (nr - 1));
+      p += 3 + nr + 2 * L;
+    }
+    const pos = new Float32Array(3 * nv), nrm = new Float32Array(3 * nv), b = new Float32Array(nv), rr = new Float32Array(nv);
+    const idx = new Uint32Array(ni);
+    let v = 0, q = 0;
+    const put = (x, z, base, rel, nx, ny, nz) => { pos[3 * v] = x; pos[3 * v + 2] = z; nrm[3 * v] = nx; nrm[3 * v + 1] = ny; nrm[3 * v + 2] = nz; b[v] = base; rr[v] = rel; return v++; };
+    const X = (c) => xOfI(ti * T + c / Q * T), Z = (c) => zOfJ(tj * T + c / Q * T);
+    for (let p = 0; p < a.length;) {
       const base = a[p] / 2000, h = a[p + 1] / 10000, nr = a[p + 2], lens = Array.from(a.subarray(p + 3, p + 3 + nr));
       p += 3 + nr;
       const rings = lens.map((n) => { const ring = []; for (let k = 0; k < n; k++, p += 2) ring.push(new THREE.Vector2(X(a[p]), Z(a[p + 1]))); return ring; });
-      const all = [].concat(...rings);
-      for (const tri of THREE.ShapeUtils.triangulateShape(rings[0], rings.slice(1))) for (const v of tri) put(all[v], base, h);
+      const v0 = v;
+      for (const ring of rings) for (const P of ring) put(P.x, P.y, base, h, 0, 1, 0);
+      const tris = THREE.ShapeUtils.triangulateShape(rings[0], rings.slice(1));
+      const all = rings.flat();
+      for (const tri of tris) if (q + 3 <= ni) {  // wound counter-clockwise seen from above, so the up normal is the front face's
+        const A = all[tri[0]], B = all[tri[1]], C = all[tri[2]], up = (B.y - A.y) * (C.x - A.x) - (B.x - A.x) * (C.y - A.y) > 0;
+        idx[q++] = v0 + tri[0]; idx[q++] = v0 + (up ? tri[1] : tri[2]); idx[q++] = v0 + (up ? tri[2] : tri[1]);
+      }
       for (const ring of rings) for (let k = 0; k < ring.length; k++) {
-        const A = ring[k], B = ring[(k + 1) % ring.length];
-        put(A, base, -0.02); put(B, base, -0.02); put(B, base, h);
-        put(A, base, -0.02); put(B, base, h); put(A, base, h);
+        const A = ring[k], B = ring[(k + 1) % ring.length], dx = B.x - A.x, dz = B.y - A.y, l = Math.hypot(dx, dz) || 1;
+        const nx = -dz / l, nz = dx / l;  // the front face's side for this winding
+        const w0 = put(A.x, A.y, base, -0.02, nx, 0, nz), w1 = put(B.x, B.y, base, -0.02, nx, 0, nz);
+        const w2 = put(B.x, B.y, base, h, nx, 0, nz), w3 = put(A.x, A.y, base, h, nx, 0, nz);
+        idx[q++] = w0; idx[q++] = w1; idx[q++] = w2; idx[q++] = w0; idx[q++] = w2; idx[q++] = w3;
       }
       t.n++;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
-    t.b = Float32Array.from(b); t.r = Float32Array.from(rr);
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+    g.setIndex(new THREE.BufferAttribute(q < ni ? idx.slice(0, q) : idx, 1));
+    t.b = b; t.r = rr; t.nv = nv;
     t.mesh = new THREE.Mesh(g, bldMat);
     t.mesh.visible = false;
     bldHeights(t, exag());
-    g.computeVertexNormals();
     if (bldTiles.get(key) === t) scene.add(t.mesh); else g.dispose();
   } catch (e) { t.failed = true; }
   bldLoading--;
+}
+// ---------- landmarks (landmarks3d.py): structures the footprints cannot draw, e.g. the Golden Gate Bridge ----------
+// indexed meshes in cell indices from an origin; heights above sea level and the ground under each vertex (m), placed as
+// the buildings (ground x exaggeration + height above it). Shown with the buildings toggle and the close-up terrain,
+// out to 120 km so that they stay in an orbit; the suspenders (lines) only within 8 km.
+let LMK = [];
+function lmkHeights(L, e) {
+  const p = L.mesh.geometry.attributes.position.array;
+  for (let k = 0; k < L.h.length; k++) p[3 * k + 1] = (L.g[k] * e + L.h[k] - L.g[k]) / 1000;
+  L.mesh.geometry.attributes.position.needsUpdate = true;
+  L.mesh.geometry.computeVertexNormals(); L.mesh.geometry.computeBoundingSphere();
+  if (L.lines) { const q = L.lines.geometry.attributes.position.array;
+    for (let k = 0; k < L.lh.length; k++) q[3 * k + 1] = (L.lg[k] * e + L.lh[k] - L.lg[k]) / 1000;
+    L.lines.geometry.attributes.position.needsUpdate = true; L.lines.geometry.computeBoundingSphere(); }
+}
+async function loadLandmarks() {
+  for (const L of LMK) { scene.remove(L.mesh); if (L.lines) scene.remove(L.lines); }
+  LMK = [];
+  if (!(DEM && DEM.landmarks)) return;
+  let J; try { const r = await fetch(BLDDIR + "landmarks.json"); if (!r.ok) return; J = await r.json(); } catch (e) { return; }
+  if (!bldSun) { bldSun = new THREE.DirectionalLight(0xffffff, 2.0); bldAmb = new THREE.HemisphereLight(0xe4ecf2, 0x6b6258, 1.15); scene.add(bldSun, bldSun.target, bldAmb); }
+  for (const it of J.items) {
+    const v = it.v, [fi0, fj0] = it.o;
+    const X = (k) => xOfI(fi0 + v[4 * k]), Z = (k) => zOfJ(fj0 + v[4 * k + 1]);
+    // flat-shaded: one vertex per triangle corner
+    const t = it.tri, pos = new Float32Array(t.length * 3), h = new Float32Array(t.length), g = new Float32Array(t.length);
+    t.forEach((k, m) => { pos[3 * m] = X(k); pos[3 * m + 2] = Z(k); h[m] = v[4 * k + 2]; g[m] = v[4 * k + 3]; });
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const col = new THREE.Color(it.color);
+    const L = { mesh: new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: col })), h, g, name: it.name };
+    if (it.seg && it.seg.length) {
+      const sp = new Float32Array(it.seg.length * 3), lh = new Float32Array(it.seg.length), lg = new Float32Array(it.seg.length);
+      it.seg.forEach((k, m) => { sp[3 * m] = X(k); sp[3 * m + 2] = Z(k); lh[m] = v[4 * k + 2]; lg[m] = v[4 * k + 3]; });
+      const lgeo = new THREE.BufferGeometry(); lgeo.setAttribute("position", new THREE.BufferAttribute(sp, 3));
+      L.lines = new THREE.LineSegments(lgeo, new THREE.LineBasicMaterial({ color: col.clone().multiplyScalar(0.8) }));
+      L.lh = lh; L.lg = lg; L.lines.visible = false; scene.add(L.lines);
+    }
+    L.mesh.visible = false; scene.add(L.mesh);
+    lmkHeights(L, exag());
+    LMK.push(L);
+  }
+}
+function updateLandmarks() {
+  if (!LMK.length) return;
+  const on = $("bld").checked && DEM && $("dem").checked, tx = controls.target.x, tz = controls.target.z;
+  const dist = camera.position.distanceTo(controls.target);
+  for (const L of LMK) {
+    const c = L.mesh.geometry.boundingSphere.center, near = Math.hypot(c.x - tx, c.z - tz) < 120 && dist < 200;
+    L.mesh.visible = !!(on && near); if (L.lines) L.lines.visible = !!(on && near && dist < 8);
+  }
 }
 function updateBld(now) {
   if (!BLD || now - bldClock < 300) return;
@@ -434,10 +504,14 @@ function updateBld(now) {
   const fine = DEM && demLev === DEM.levels.length - 1;
   const want = new Set();
   if (on && fine && dist < 30) {
-    const T = BLD.T, rad = Math.min(dist * 1.6 + 3, 22), tx = controls.target.x, tz = controls.target.z;
+    const T = BLD.T, rad = Math.min(dist * 1.6 + 3, PHONE ? 8 : 22), tx = controls.target.x, tz = controls.target.z;
     for (let tj = Math.floor(jOfZ(tz - rad) / T); tj <= Math.floor(jOfZ(tz + rad) / T); tj++)
       for (let ti = Math.floor(iOfX(tx - rad) / T); ti <= Math.floor(iOfX(tx + rad) / T); ti++)
         if (BLD.n.has(tj + "_" + ti)) want.add(tj + "_" + ti);
+    // nearest tiles first, within the vertex budget (~45 vertices a building)
+    const cx = (k) => { const [tj, ti] = k.split("_").map(Number); return Math.hypot(xOfI((ti + 0.5) * T) - tx, zOfJ((tj + 0.5) * T) - tz); };
+    let est = 0; const budget = PHONE || IPAD ? 1.5e6 : 8e6;
+    for (const k of [...want].sort((x, y) => cx(x) - cx(y))) { est += 45 * BLD.n.get(k); if (est > budget && est > 45 * BLD.n.get(k)) want.delete(k); }
     for (const k of want) if (!bldTiles.has(k) && bldLoading < 4) { const [tj, ti] = k.split("_").map(Number); loadBldTile(tj, ti); }
   }
   let shown = 0, nb = 0;
@@ -446,9 +520,12 @@ function updateBld(now) {
     t.mesh.visible = want.has(k);
     if (t.mesh.visible) { t.used = now; shown++; nb += t.n; }
   }
-  if (bldTiles.size > 60) {
+  // keep hidden tiles for a quick return, within a vertex budget (a phone tab has a few hundred MB)
+  let total = 0; for (const t of bldTiles.values()) total += t.nv || 0;
+  const budget = PHONE || IPAD ? 1.5e6 : 8e6;
+  if (total > budget) {
     const old = [...bldTiles.entries()].filter(([, t]) => t.mesh && !t.mesh.visible).sort((x, y) => x[1].used - y[1].used);
-    for (const [k, t] of old.slice(0, bldTiles.size - 60)) { scene.remove(t.mesh); t.mesh.geometry.dispose(); bldTiles.delete(k); }
+    for (const [k, t] of old) { if (total <= budget) break; total -= t.nv; scene.remove(t.mesh); t.mesh.geometry.dispose(); bldTiles.delete(k); }
   }
   if (bldSun && terrainMesh) {  // the terrain's light (sun by day, dimmed fixed light at night)
     const u = terrainMesh.material.uniforms, d = u.uDayLight ? u.uDayLight.value : 1;
@@ -1776,7 +1853,7 @@ function frame(now) {
   if (cloudMesh && TIERS[QUAL]) { const u = cloudMesh.material.uniforms; u.uNear.value = Math.max(4, 0.35 * dist); u.uSteps.value = moving ? TIERS[QUAL].move : TIERS[QUAL].steps; }
   camera.near = Math.max(0.2, dist / 2000); camera.far = dist * 20 + 2000; camera.updateProjectionMatrix();
   if (marker) marker.scale.setScalar(Math.max(0.15, camera.position.distanceTo(marker.position) / 160));
-  if (REG) { updateDem(now); updateCoast(now); updateBld(now); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
+  if (REG) { updateDem(now); updateCoast(now); updateBld(now); updateLandmarks(); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
   renderer.render(scene, camera);
   if (cloudMesh && cloudMesh.visible) {
     updateTerrainShadow();
@@ -1878,6 +1955,7 @@ async function main() {
   await loadDemMeta();
   await loadCoastMeta();
   await loadBldMeta();
+  await loadLandmarks();
   await loadRegion("all", true);
   $("dem").onchange = () => { demKey = ""; demClock = 0; };
   for (const m of M.models) $("model").append(new Option(m.name, m.id));
