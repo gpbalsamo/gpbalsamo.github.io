@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IFS Land, Lakes, Rivers, Floods Benchmarking Dashboards</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      color: #1f2937;
+    }
+    header {
+      padding: 12px 20px;
+      background: #1f2937;
+      color: white;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+    header p {
+      margin: 4px 0 0;
+      font-size: 14px;
+      color: #cbd5e1;
+    }
+    main {
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    section {
+      margin-bottom: 36px;
+    }
+    section h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      color: #1f2937;
+      border-bottom: 2px solid #1f2937;
+      padding-bottom: 6px;
+    }
+    section .lede {
+      margin: 8px 0 16px;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    .card {
+      display: block;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .card:hover {
+      border-color: #1f2937;
+    }
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+      color: #1f2937;
+    }
+    .card p {
+      margin: 0;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    footer {
+      max-width: 720px;
+      margin: 0 auto 40px;
+      padding: 0 20px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+    footer a {
+      color: #4b5563;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>IFS Land, Lakes, Rivers, Floods Benchmarking Dashboards</h1>
+    <p>ecLand&ndash;CaMa-Flood (IFS) model vs. in-situ flux-tower, river-gauge and satellite flood observations</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>ifs-landbench</h2>
+      <p class="lede">
+        Offline single-point ecLand runs scored against flux-tower observations &mdash;
+        latent and sensible heat, net ecosystem exchange, methane flux, and soil
+        moisture and temperature. Dashboards are served from the
+        <a href="https://github.com/gpbalsamo/ifs-landbench">ifs-landbench</a> repository.
+      </p>
+
+      <a class="card" href="https://gpbalsamo.github.io/ifs-landbench/benchmark/dashboards/best42/">
+        <h3>Curated Best-Sites Subset</h3>
+        <p>The towers recommended for automated benchmarking, chosen for spatial and biome diversity: 36 available here, 664 site-years.</p>
+      </a>
+
+      <a class="card" href="https://gpbalsamo.github.io/ifs-landbench/benchmark/dashboards/shuttle-all775/">
+        <h3>All 775 Sites</h3>
+        <p>The full FLUXNET-Shuttle pool across AmeriFlux, ICOS and TERN: 775 towers, 1507 site-years. Median r of 0.79 (Qle) and 0.82 (Qh).</p>
+      </a>
+    </section>
+
+    <section>
+      <h2>ifs-lakebench</h2>
+      <p class="lede">
+        Offline single-point ecLand (FLake lake scheme) runs scored against
+        satellite lake-surface-water-temperature observations &mdash; overpass
+        and daily-mean matching. Dashboards are served from the
+        <a href="https://github.com/gpbalsamo/ifs-lakebench">ifs-lakebench</a> repository.
+      </p>
+
+      <a class="card" href="https://gpbalsamo.github.io/ifs-lakebench/">
+        <h3>Lakes vs. ESA CCI Lakes LSWT</h3>
+        <p>23 lakes worldwide spun up over 2017&ndash;2022, model AvgSurfT vs. ESA CCI Lakes surface temperature, at satellite overpass and daily-mean instants.</p>
+      </a>
+    </section>
+
+    <section>
+      <h2>ifs-riverbench</h2>
+      <p class="lede">
+        River discharge from the IFS river routing component, scored against gauge
+        observations. Dashboards are served from the
+        <a href="https://github.com/gpbalsamo/ifs-riverbench">ifs-riverbench</a> repository.
+      </p>
+
+      <a class="card" href="discharge-dashboard/">
+        <h3>Discharge vs. Gauges</h3>
+        <p>River discharge model experiments vs. gauge observations, by station, with a river-network diagnostic view.</p>
+      </a>
+    </section>
+
+    <section>
+      <h2>ifs-floodbench</h2>
+      <p class="lede">
+        Flood extent from CaMa-Flood coupled to the IFS, scored against satellite
+        flood mapping (VIIRS, GFM, MODIS) over three event catalogues. Dashboards
+        are served from the
+        <a href="https://github.com/gpbalsamo/ifs-floodbench">ifs-floodbench</a> repository.
+      </p>
+
+      <a class="card" href="kurosiwo-dashboard/">
+        <h3>KuroSiwo Flood Events</h3>
+        <p>Model vs. VIIRS / GFM / MODIS observations for 43 events from the KuroSiwo benchmark catalogue.</p>
+      </a>
+
+      <a class="card" href="modis2016-dashboard/">
+        <h3>Post-2016 Named Events</h3>
+        <p>Model vs. observations for 17 hand-picked notable global floods since 2016.</p>
+      </a>
+
+      <a class="card" href="de2026-dashboard/">
+        <h3>DE 2026 Events</h3>
+        <p>Model vs. observations for 10 recent, currently-monitored flood events.</p>
+      </a>
+    </section>
+  </main>
+
+  <footer>
+    Source repositories:
+    <a href="https://github.com/gpbalsamo/ifs-landbench">ifs-landbench</a>,
+    <a href="https://github.com/gpbalsamo/ifs-lakebench">ifs-lakebench</a>,
+    <a href="https://github.com/gpbalsamo/ifs-riverbench">ifs-riverbench</a>,
+    <a href="https://github.com/gpbalsamo/ifs-floodbench">ifs-floodbench</a>.
+    Tower observations are redistributed under CC-BY-4.0 from AmeriFlux, ICOS,
+    TERN and the FLUXNET-CH4 Community Product.
+  </footer>
+</body>
+</html>

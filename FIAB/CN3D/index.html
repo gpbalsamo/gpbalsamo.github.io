@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>China in 3D · FIAB</title>
+<meta name="theme-color" content="#0d1820">
+<style>
+:root{color-scheme:dark;--ink:#e9eef2;--ink2:#a9b8c3;--ink3:#7f909c;--acc:#f0b44c;--card:#101d27e6;--line:#ffffff1f;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:#0d1820}
+*{box-sizing:border-box}body{margin:0;overflow:hidden}
+#scene{position:fixed;inset:0}#scene canvas{display:block}
+.card{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(10px);box-shadow:0 8px 30px #0006}
+#intro{left:16px;top:16px;width:340px;padding:14px 16px}
+#intro .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:700}
+#intro h1{margin:4px 0 4px;font-size:22px;letter-spacing:-.01em}
+#intro p{margin:4px 0;color:var(--ink2);font-size:12.5px}
+#intro .warn{color:#f3cf8a}
+#intro a{color:#9fd0f0}
+details{margin-top:8px;font-size:12px;color:var(--ink2)}details summary{cursor:pointer;color:#9fd0f0}details p{margin:6px 0}
+details[open]{max-height:45vh;overflow:auto}
+#ctrl{right:16px;top:16px;width:250px;padding:12px 14px;max-height:calc(100vh - 150px);overflow:auto}
+label.l{display:block;font-size:12px;color:var(--ink2);margin:10px 0 4px}label.l:first-child{margin-top:0}
+select,button,input[type=search]{font:inherit;color:var(--ink);background:#1a2c39;border:1px solid #ffffff2a;border-radius:7px;padding:6px 8px}
+select,input[type=search]{width:100%}button{cursor:pointer}button:hover{background:#24404f}button:disabled{opacity:.4;cursor:default}
+button.on{background:#7a5414;border-color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.row{display:flex;gap:6px;align-items:center}.row>*{flex:1}
+.chk{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);margin-top:8px}
+#matches button{display:block;width:100%;text-align:left;margin-top:3px;font-size:12px;padding:5px 8px}
+.leg{margin-top:12px;font-size:11.5px;color:var(--ink2)}
+.bar{height:8px;border-radius:4px;margin:3px 0 2px}.ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--ink3)}
+.bands{display:flex;gap:2px;margin-top:4px}.bands span{flex:1;text-align:center;font-size:10px;color:#111;border-radius:3px;padding:2px 0}
+#time{left:16px;right:16px;bottom:16px;max-width:1080px;margin:auto;padding:10px 14px}
+#time .row{flex-wrap:wrap}#time .row>*{flex:0 0 auto}#when{font-size:17px;font-weight:600;margin-left:6px}#lead{margin-left:auto;color:var(--ink2);font-size:12px}
+#hour{margin:8px 0 2px}#ends{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3)}
+#interp{font-size:11px;color:var(--ink3)}
+#info{left:16px;bottom:128px;width:300px;padding:10px 14px;font-size:12.5px}
+#info b{color:var(--ink)}#info .k{color:var(--ink2)}
+#compass{right:24px;bottom:132px;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0}
+#compass span{display:block;font-weight:700;color:var(--acc);font-size:12px}
+#status{position:absolute;left:50%;top:16px;transform:translateX(-50%);padding:6px 12px;font-size:12px;display:none}
+.lab{position:absolute;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000;pointer-events:none;white-space:nowrap;transform:translate(-50%,-140%);transition:opacity .18s}
+.lab:after{content:"";position:absolute;left:50%;top:115%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#fff}
+#mg{left:16px;bottom:128px;width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 160px);overflow:auto;padding:10px 14px;z-index:5;background:#0f1b25f5}
+#mg[hidden]{display:none}#mgHead{cursor:grab;user-select:none;touch-action:none}#mgHead:active{cursor:grabbing}
+#mgClose{float:right;font-size:16px;padding:0 9px}#mgPlace{font-weight:700;font-size:15px}#mgSub{font-size:12px;color:var(--ink2)}
+#mgNote{font-size:11px;color:var(--ink3);margin-top:4px}
+#mg{resize:both;min-width:280px;min-height:160px}
+body.bare #intro,body.bare #ctrl,body.bare #info,body.bare #compass,body.bare #ends,body.bare #hour,body.bare #time .opt{display:none}
+body.bare #time{left:auto;right:16px;max-width:none;width:auto}
+#toast{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);padding:6px 12px;font-size:12px;display:none;z-index:9}svg.ch{display:block;width:100%;cursor:crosshair}
+.seg{display:flex;flex-wrap:wrap;gap:4px}.seg button{flex:1 1 45%;font-size:12px;padding:5px 4px}
+#orbitBox,#cloudOpts{border-left:2px solid #f0b44c55;padding-left:8px;margin-top:6px}#orbName{font-size:12px;color:var(--acc)}
+#ftb{left:50%;bottom:16px;transform:translateX(-50%);padding:6px 8px;display:none;gap:6px;align-items:center;z-index:6}
+#ftb select{width:auto}#ftb button{padding:6px 10px}
+#clock{right:16px;top:16px;padding:8px 12px;font:600 20px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;display:none}
+#clock small{font-size:12px;color:var(--ink2)}
+body.bare #time{display:none}body.bare #ftb{display:flex}body.bare #clock{display:block}body.bare #mg{display:none}
+#mgText{margin:6px 0 4px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#ffffff08;font-size:13px}
+#mgText[hidden]{display:none}#mgText p{margin:5px 0}#mgText .k{font-size:11px;color:var(--ink3)}.tfHead{font-weight:700;color:var(--acc)}
+@media (max-width:760px){#intro{width:calc(100vw - 32px);max-height:30vh;overflow:auto}#intro p.long{display:none}#ctrl{top:auto;bottom:140px;width:200px;max-height:40vh}#info{display:none}#compass{display:none}#when{font-size:14px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="scene" aria-label="Interactive 3D view of the terrain of China and East Asia with the forecast weather"></div>
+
+<header id="intro" class="card">
+  <div class="kicker">FIAB · China 6′ LAM · weather in 3D</div>
+  <h1>From the Himalaya to the Yellow Sea</h1>
+  <p class="long">China and East Asia in relief with the forecast rain, snow, cloud, isobars and surface wind, hour by hour, from a 6′ (0.1°) limited-area model trained on IFS 9 km analyses, run from today's IFS analysis.</p>
+  <p class="warn">Experimental research demonstration · not official guidance</p>
+  <p>Drag to orbit · scroll to zoom · right-drag or shift-drag to pan · click to inspect · double-click to focus · find a place to fly there and circle it · H hides the panels</p>
+  <p><a href="../">FIAB home</a></p>
+  <details>
+    <summary>About, data and limitations</summary>
+<p><b>Model.</b> A 6-arc-minute (0.1°, about 10 km) limited area over 66–142°E, 9–55°N on the CaMa-Flood glb_06min cells inside a global N320 grid, warm-started from BRIS-NZ (MET Norway's BRIS translated to New Zealand) and trained on IFS operational analyses 2016–2026 (single step, then rollout to 24 h); the global part is driven by the AIFS forecast. 72 h from the IFS analysis, output every 6 h; a 72 h forecast takes about half a minute on one GPU.</p>
+<p><b>Hourly frames are interpolated</b> from the 6-hourly data: temperature, dewpoint and snow level with a monotone cubic Hermite curve, wind and cloud linearly; precipitation is spread over each 6 h window so that the hourly amounts add up exactly to the 6 h total. Hour h shows the precipitation of the hour ending at h.</p>
+<p><b>Rain or snow.</b> The share of snow comes from the height of the model cell against the snow level. <b>Snow level</b> is the height of the 0 °C wet-bulb temperature, from the 2 m temperature and dewpoint at the model surface and the temperature and humidity on the pressure levels above it (1000–500 hPa). Amounts are water equivalent, not snow depth.</p>
+<p><b>3D cloud</b> is drawn in the browser from the model's relative humidity on its pressure levels (1000–300 hPa): cloud where the humidity passes a threshold that rises from 60 % at 300 hPa to 90 % at 1000 hPa (the slider scales it), each level at its standard-atmosphere height, the volume ray-marched over the exaggerated terrain. It is an illustration of where the air is near saturation, not the model's cloud cover (that is the readout and the meteogram). <b>Isobars</b> are the mean sea-level pressure, smoothed, faded over terrain above ~1500 m where sea-level pressure is an extrapolation. The <b>text forecast</b> is written in the browser by fixed rules from the point's hourly values, not by a forecaster.</p>
+<p><b>Terrain</b> is the IFS TCo7999 climate orography (about 1.3 km; the whole-domain view is coarser, the regions under “Explore” are at about 1.25 km), vertically exaggerated. The weather is on the model cells (0.1°, about 9.4 × 11 km), so the relief and the snow line painted on it are finer than the weather. Snow is painted where the terrain is above the snow level of the hour. Wind trails show the 10 m wind over the surface, not three-dimensional trajectories.</p>
+<p>Contains modified ECMWF data © ECMWF, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (<a href="https://apps.ecmwf.int/datasets/licences/general/" target="_blank" rel="noopener">ECMWF terms</a>). AIFS Single: CC BY 4.0. BRIS weights: MET Norway. Times are China Standard Time (UTC+8). Built with <a href="https://github.com/ecmwf/forecast-in-a-box" target="_blank" rel="noopener">Forecast-in-a-Box</a> and <a href="https://github.com/ecmwf/anemoi-core" target="_blank" rel="noopener">anemoi</a>; rendering with <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT). The idea of a 3D terrain explorer follows Neil Gordon's BRIS NZ “weather in three dimensions” demonstration; this page is independent code.</p>
+<p>Provided as is, without any guarantee; not a basis for decisions. For official forecasts and warnings consult the <a href="https://www.cma.gov.cn" target="_blank" rel="noopener">China Meteorological Administration</a> and the national services of the neighbouring countries. Place coordinates are approximate.</p>
+  </details>
+</header>
+
+<aside id="ctrl" class="card">
+  <label class="l" for="model">Model</label><select id="model"></select>
+  <label class="l" for="run">Forecast start</label><select id="run"></select>
+  <label class="l" for="view">Explore</label>
+  <select id="view"></select>
+  <label class="l" for="exag">Terrain height <b id="exagV">8×</b></label><input id="exag" type="range" min="1" max="15" step="0.5" value="8">
+  <label class="l" for="spd">Wind trail speed</label><input id="spd" type="range" min="0.2" max="3" step="0.1" value="1">
+  <label class="l" for="dens">Wind trail density</label><select id="dens"><option value="0.33">Sparse</option><option value="0.67" selected>Normal</option><option value="1">Dense</option></select>
+  <div class="chk"><input type="checkbox" id="trails" checked><label for="trails">Wind trails</label>
+    <input type="checkbox" id="labels" checked><label for="labels">Places</label></div>
+  <div class="row" style="margin-top:10px"><button id="reset">Reset view</button><button id="topdown" title="Look straight down">Top-down</button></div>
+  <div class="row" style="margin-top:6px"><button id="share" title="Copy a link to this view (place, time, camera)">Share view</button></div>
+  <label class="l">Colour the landscape</label><div class="seg" id="modes"></div>
+  <div id="opacRow"><label class="l" for="opac">Opacity <b id="opacV"></b></label><input id="opac" type="range" min="0.1" max="1" step="0.05" value="0.85"></div>
+  <div class="chk" id="isoRow"><input type="checkbox" id="iso"><label for="iso">Isobars (MSLP) every</label>
+    <select id="isoStep" style="width:auto;padding:2px 4px"><option value="2">2</option><option value="4">4</option></select><span>hPa</span></div>
+  <div class="chk"><input type="checkbox" id="night"><label for="night">Day and night (sun of the displayed time)</label></div>
+  <div id="cloudRow"><div class="chk"><input type="checkbox" id="clouds" checked><label for="clouds">3D cloud</label></div>
+    <div id="cloudOpts">
+      <label class="l" for="quality">Cloud quality</label><select id="quality"><option value="auto">Auto (adapts to this device)</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low (phones)</option><option value="off">Off: flat cloud cover</option></select>
+      <div id="volOpts">
+      <div id="csrcRow" hidden><label class="l" for="csrc">Cloud from</label><select id="csrc"><option value="r">Humidity (relative humidity threshold)</option><option value="w">Model condensate (liquid + ice water)</option></select></div>
+      <label class="l" for="clev">Cloud levels</label><select id="clev"><option value="all">All levels</option><option value="low">Low (below ~3 km)</option><option value="mid">Middle (3–7 km)</option><option value="high">High (above ~7 km)</option></select>
+      <label class="l" for="cthr">Humidity threshold <b id="cthrV">75 %</b></label><input id="cthr" type="range" min="50" max="100" step="1" value="75">
+      <label class="l" for="cden">Cloud density</label><input id="cden" type="range" min="0.01" max="0.4" step="0.01" value="0.06">
+      <label class="l" for="cdet">Edge detail <b id="cdetV"></b></label><input id="cdet" type="range" min="0" max="1" step="0.05" value="0.5">
+      <div class="chk" id="cdetRow" hidden><input type="checkbox" id="cdetOn"><label for="cdetOn">Edge detail on this quality tier</label></div>
+      <div class="chk"><input type="checkbox" id="orig"><label for="orig">Show the original volume (no detail)</label></div>
+      <div class="chk"><input type="checkbox" id="cself" checked><label for="cself">Self-shadowing (sunlight through the cloud)</label></div>
+      <div class="chk" id="tshadowRow"><input type="checkbox" id="tshadow" checked><label for="tshadow">Cloud shadows on the terrain</label></div>
+      <div class="k" id="sunV" style="font-size:11px;color:var(--ink3);margin-top:6px"></div>
+      </div>
+    </div></div>
+  <label class="l" for="q">Find a place and orbit it</label><input id="q" type="search" placeholder="Town…" autocomplete="off">
+  <div id="matches"></div>
+  <div id="orbitBox" hidden><div id="orbName"></div>
+    <label class="l" for="orbH">Orbit height (km above the place)</label><input id="orbH" type="range" min="0.5" max="20" step="0.5" value="2">
+    <label class="l" for="orbD">Orbit distance (km)</label><input id="orbD" type="range" min="10" max="600" step="5" value="90">
+    <label class="l" for="orbT">Time per circuit (s)</label><input id="orbT" type="range" min="15" max="180" step="5" value="60">
+    <div class="chk"><input type="checkbox" id="orbPlay" checked><label for="orbPlay">Animate the weather while orbiting</label></div>
+    <div class="row" style="margin-top:6px"><button id="orbStop">Stop orbit</button></div></div>
+  <div class="leg" id="legTemp" hidden><b>2 m temperature</b> · °C<div class="bar" id="barTemp"></div>
+    <div class="ticks"><span>−40</span><span>−25</span><span>−10</span><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span></div></div>
+  <div class="leg" id="legWind" hidden><b>10 m wind speed</b> · km/h<div class="bar" id="barWind"></div>
+    <div class="ticks"><span>0</span><span>30</span><span>60</span><span>90</span><span>120</span></div></div>
+  <div class="leg" id="legRain"><b>Precipitation</b> · mm in the hour
+    <div style="margin-top:4px">Rain</div><div class="bar" id="barRain"></div>
+    <div class="ticks"><span>0.1</span><span>0.5</span><span>2</span><span>5</span><span>10</span><span>20</span><span>40+</span></div>
+    <div style="margin-top:4px">Snow (water equivalent)</div><div class="bar" id="barSnow"></div>
+    <div class="ticks"><span>0.1</span><span>1</span><span>5</span><span>20+</span></div>
+  </div>
+  <div class="leg"><b>Wind trails</b> · 10 m wind, km/h · wider = faster<div class="bands" id="bands"></div>
+    <div style="margin-top:6px"><b>Cloud</b> · a volume where the relative humidity on the model's pressure levels passes the threshold (higher for low cloud), or from the model's cloud water where it is available; lit by the sun of the displayed time</div></div>
+</aside>
+
+<div id="compass" class="card" title="North"><span id="needle">▲<br>N</span></div>
+<div id="status" class="card"></div>
+<div id="toast" class="card"></div>
+<div id="perf" class="card" hidden style="position:absolute;left:50%;top:56px;transform:translateX(-50%);padding:4px 10px;font:12px ui-monospace,monospace;z-index:8"></div>
+<div id="info" class="card">Click the landscape to inspect the forecast.</div>
+<div id="labs"></div>
+
+<section id="mg" class="card" hidden aria-label="Point forecast">
+  <div id="mgHead"><button id="mgClose" aria-label="Close">×</button>
+    <div id="mgPlace"></div><div id="mgSub"></div></div>
+  <div class="row" style="margin:6px 0"><button id="tf" style="flex:0 0 auto">Text forecast</button></div>
+  <div id="mgText" hidden></div>
+  <div id="mgCharts"></div>
+  <div id="mgNote"></div>
+</section>
+
+<div id="time" class="card">
+  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" class="opt" title="Hour with the most precipitation over land">Peak rain</button><button id="now" class="opt" title="The current hour, when it is inside the forecast">Now</button><select id="speed" class="opt" title="Playback speed" style="width:auto"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="hide" title="Hide or show the panels (key H)">Hide controls</button>
+    <span id="when"></span><span id="lead"></span></div>
+  <input id="hour" type="range" min="0" max="72" value="0" aria-label="Hour">
+  <div id="ends"><span id="t0"></span><span id="interp">hourly frames interpolated</span><span id="t1"></span></div>
+</div>
+
+<div id="clock" class="card"></div>
+<div id="ftb" class="card"><button id="fPrev" aria-label="One hour back">−1 h</button><button id="fPlay" aria-label="Play">▶</button><button id="fNext" aria-label="One hour on">+1 h</button>
+  <select id="fSpeed" title="Playback speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select>
+  <button id="fNow">Now</button><button id="fHide">☰ Controls</button></div>
+
+<script type="module" src="geo3d.js?v=202611151435"></script>
+<script src="../brand.js" data-pos="tc" defer></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IFS Riverbench Dashboards</title>
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  color: #1f2937;
+}
+header {
+  padding: 10px 20px;
+  background: #1f2937;
+  color: white;
+}
+header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+header p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 10px 20px;
+  background: white;
+  border-bottom: 1px solid #ccc;
+}
+.ctrl-group { display: flex; align-items: center; gap: 6px; }
+.ctrl-label { font-size: 12px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 2px; }
+.ctrl-btn {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background: #f3f4f6;
+  color: #4b5563;
+  cursor: pointer;
+}
+.ctrl-btn.active { background: #1f2937; color: #fff; border-color: #1f2937; }
+#pair-group { display: none; }
+#open-new-tab { margin-left: auto; font-size: 13px; color: #1f2937; font-weight: bold; text-decoration: none; }
+#open-new-tab:hover { text-decoration: underline; }
+#frame-wrap { position: absolute; top: 96px; bottom: 0; left: 0; right: 0; }
+iframe { width: 100%; height: 100%; border: none; }
+@media (max-width: 900px) {
+  #frame-wrap { top: 132px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>IFS Riverbench Dashboards</h1>
+  <p>River discharge model experiments vs. observations, by station</p>
+</header>
+<div id="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Metric</span>
+    <button class="ctrl-btn metric-btn" data-metric="correlation">Correlation</button>
+<button class="ctrl-btn metric-btn" data-metric="kge">KGE</button>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">View</span>
+    <button class="ctrl-btn mode-btn" data-mode="best_metric">Best metric</button>
+<button class="ctrl-btn mode-btn" data-mode="best_experiment">Best experiment</button>
+<button class="ctrl-btn mode-btn" data-mode="experiment_difference">Difference</button>
+  </div>
+  <div class="ctrl-group" id="pair-group">
+    <span class="ctrl-label">Comparison</span>
+    <button class="ctrl-btn pair-btn" data-pair="iyp3_vs_iwya">iyp3 vs iwya</button>
+<button class="ctrl-btn pair-btn" data-pair="glofas_v5_vs_iwya">glofas_v5 vs iwya</button>
+  </div>
+  <a id="open-new-tab" href="#" target="_blank">Open in new tab &#8599;</a>
+</div>
+<div id="frame-wrap">
+  <iframe id="dashboard-frame" title="Dashboard"></iframe>
+</div>
+<script>
+const DASHBOARDS = {"correlation": {"experiment_difference": {"glofas_v5_vs_iwya": "global_station_dashboard_iwya_glofas_v5_20180101_20221231_15arcmin_correlation_experiment_difference.html", "iyp3_vs_iwya": "global_station_dashboard_iwya_iyp3_20180101_20221231_15arcmin_correlation_experiment_difference.html"}, "best_experiment": "global_station_dashboard_iyp3_iwya_glofas_v5_20180101_20221231_15arcmin_correlation_best_experiment.html", "best_metric": "global_station_dashboard_iyp3_iwya_glofas_v5_20180101_20221231_15arcmin_correlation_best_metric.html"}, "kge": {"experiment_difference": {"glofas_v5_vs_iwya": "global_station_dashboard_iwya_glofas_v5_20180101_20221231_15arcmin_kge_experiment_difference.html", "iyp3_vs_iwya": "global_station_dashboard_iwya_iyp3_20180101_20221231_15arcmin_kge_experiment_difference.html"}, "best_experiment": "global_station_dashboard_iyp3_iwya_glofas_v5_20180101_20221231_15arcmin_kge_best_experiment.html", "best_metric": "global_station_dashboard_iyp3_iwya_glofas_v5_20180101_20221231_15arcmin_kge_best_metric.html"}};
+const PAIRS = [{"key": "iyp3_vs_iwya", "label": "iyp3 vs iwya"}, {"key": "glofas_v5_vs_iwya", "label": "glofas_v5 vs iwya"}];
+
+let state = {
+  metric: "kge",
+  mode: "experiment_difference",
+  pair: "iyp3_vs_iwya"
+};
+
+function currentFile() {
+  const byMode = DASHBOARDS[state.metric] || {};
+  if (state.mode === "experiment_difference") {
+    const byPair = byMode.experiment_difference || {};
+    return byPair[state.pair] || null;
+  }
+  return byMode[state.mode] || null;
+}
+
+function render() {
+  document.querySelectorAll(".metric-btn").forEach(b => b.classList.toggle("active", b.dataset.metric === state.metric));
+  document.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === state.mode));
+  document.querySelectorAll(".pair-btn").forEach(b => b.classList.toggle("active", b.dataset.pair === state.pair));
+  document.getElementById("pair-group").style.display = state.mode === "experiment_difference" ? "flex" : "none";
+
+  const file = currentFile();
+  const frame = document.getElementById("dashboard-frame");
+  const link = document.getElementById("open-new-tab");
+  if (file) {
+    if (frame.getAttribute("src") !== file) frame.setAttribute("src", file);
+    link.setAttribute("href", file);
+  }
+}
+
+document.querySelectorAll(".metric-btn").forEach(b => b.addEventListener("click", () => { state.metric = b.dataset.metric; render(); }));
+document.querySelectorAll(".mode-btn").forEach(b => b.addEventListener("click", () => { state.mode = b.dataset.mode; render(); }));
+document.querySelectorAll(".pair-btn").forEach(b => b.addEventListener("click", () => { state.pair = b.dataset.pair; render(); }));
+
+render();
+</script>
+</body>
+</html>
