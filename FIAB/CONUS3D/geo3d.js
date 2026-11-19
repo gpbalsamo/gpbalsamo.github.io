@@ -382,16 +382,18 @@ async function loadBldMeta() {
   if (!BLD) return;
   BLD.n = new Map(BLD.tiles.map((t) => [t[0] + "_" + t[1], t[2]]));
   bldMat = new THREE.MeshLambertMaterial({ color: 0xd9d3c9, side: THREE.DoubleSide });
+  // heights on the GPU (ground x exaggeration + height above it), so the CPU copies of the vertices can be dropped
+  bldMat.userData.uExag = { value: exag() };
+  bldMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uExag = bldMat.userData.uExag;
+    sh.vertexShader = "attribute vec2 aBR;\nuniform float uExag;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      "vec3 transformed = vec3(position.x, aBR.x * uExag + aBR.y, position.z);");
+  };
   bldSun = new THREE.DirectionalLight(0xffffff, 2.0);
   bldAmb = new THREE.HemisphereLight(0xe4ecf2, 0x6b6258, 1.15);
   scene.add(bldSun, bldSun.target, bldAmb);
 }
-function bldHeights(t, e) {
-  const p = t.mesh.geometry.attributes.position.array;
-  for (let k = 0; k < t.b.length; k++) p[3 * k + 1] = t.b[k] * e + t.r[k];
-  t.mesh.geometry.attributes.position.needsUpdate = true;
-  t.mesh.geometry.computeBoundingSphere();
-}
+function bldHeights(t, e) { if (bldMat) bldMat.userData.uExag.value = e; }
 async function loadBldTile(tj, ti) {
   // typed arrays sized from a first pass over the records (an iPhone tab dies on JS arrays of millions of vertices);
   // indexed: roof rings share their vertices, each wall is one quad of 4 vertices with its own flat normal
@@ -409,10 +411,10 @@ async function loadBldTile(tj, ti) {
       nv += 5 * L; ni += 6 * L + 3 * (L - 2 + 2 * (nr - 1));
       p += 3 + nr + 2 * L;
     }
-    const pos = new Float32Array(3 * nv), nrm = new Float32Array(3 * nv), b = new Float32Array(nv), rr = new Float32Array(nv);
+    const pos = new Float32Array(3 * nv), nrm = new Int8Array(3 * nv), br = new Float32Array(2 * nv);
     const idx = new Uint32Array(ni);
     let v = 0, q = 0;
-    const put = (x, z, base, rel, nx, ny, nz) => { pos[3 * v] = x; pos[3 * v + 2] = z; nrm[3 * v] = nx; nrm[3 * v + 1] = ny; nrm[3 * v + 2] = nz; b[v] = base; rr[v] = rel; return v++; };
+    const put = (x, z, base, rel, nx, ny, nz) => { pos[3 * v] = x; pos[3 * v + 2] = z; nrm[3 * v] = Math.round(127 * nx); nrm[3 * v + 1] = Math.round(127 * ny); nrm[3 * v + 2] = Math.round(127 * nz); br[2 * v] = base; br[2 * v + 1] = rel; return v++; };
     const X = (c) => xOfI(ti * T + c / Q * T), Z = (c) => zOfJ(tj * T + c / Q * T);
     for (let p = 0; p < a.length;) {
       const base = a[p] / 2000, h = a[p + 1] / 10000, nr = a[p + 2], lens = Array.from(a.subarray(p + 3, p + 3 + nr));
@@ -436,13 +438,17 @@ async function loadBldTile(tj, ti) {
       t.n++;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
-    g.setIndex(new THREE.BufferAttribute(q < ni ? idx.slice(0, q) : idx, 1));
-    t.b = b; t.r = rr; t.nv = nv;
+    // free the CPU copy once on the GPU (a phone tab holds both otherwise)
+    const free = function () { this.array = null; };
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3).onUpload(free));
+    g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3, true).onUpload(free));
+    g.setAttribute("aBR", new THREE.BufferAttribute(br, 2).onUpload(free));
+    g.setIndex(new THREE.BufferAttribute(q < ni ? idx.slice(0, q) : idx, 1).onUpload(free));
+    t.nv = nv;
     t.mesh = new THREE.Mesh(g, bldMat);
+    t.mesh.frustumCulled = false;  // heights are set in the shader
+    g.computeBoundingBox(); g.computeBoundingSphere();  // before the CPU copy goes (three.js sorts by the sphere)
     t.mesh.visible = false;
-    bldHeights(t, exag());
     if (bldTiles.get(key) === t) scene.add(t.mesh); else g.dispose();
   } catch (e) { t.failed = true; }
   bldLoading--;
@@ -510,7 +516,7 @@ function updateBld(now) {
         if (BLD.n.has(tj + "_" + ti)) want.add(tj + "_" + ti);
     // nearest tiles first, within the vertex budget (~45 vertices a building)
     const cx = (k) => { const [tj, ti] = k.split("_").map(Number); return Math.hypot(xOfI((ti + 0.5) * T) - tx, zOfJ((tj + 0.5) * T) - tz); };
-    let est = 0; const budget = PHONE || IPAD ? 1.5e6 : 8e6;
+    let est = 0; const budget = PHONE || IPAD ? 4.5e6 : 8e6;
     for (const k of [...want].sort((x, y) => cx(x) - cx(y))) { est += 45 * BLD.n.get(k); if (est > budget && est > 45 * BLD.n.get(k)) want.delete(k); }
     for (const k of want) if (!bldTiles.has(k) && bldLoading < 4) { const [tj, ti] = k.split("_").map(Number); loadBldTile(tj, ti); }
   }
@@ -522,7 +528,7 @@ function updateBld(now) {
   }
   // keep hidden tiles for a quick return, within a vertex budget (a phone tab has a few hundred MB)
   let total = 0; for (const t of bldTiles.values()) total += t.nv || 0;
-  const budget = PHONE || IPAD ? 1.5e6 : 8e6;
+  const budget = PHONE || IPAD ? 4.5e6 : 8e6;
   if (total > budget) {
     const old = [...bldTiles.entries()].filter(([, t]) => t.mesh && !t.mesh.visible).sort((x, y) => x[1].used - y[1].used);
     for (const [k, t] of old) { if (total <= budget) break; total -= t.nv; scene.remove(t.mesh); t.mesh.geometry.dispose(); bldTiles.delete(k); }
