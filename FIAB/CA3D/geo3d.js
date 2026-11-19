@@ -97,7 +97,7 @@ void main(){
 const terrainFS = `
 precision highp float;
 varying vec2 vUv; varying float vH; varying float vLand; varying vec3 vN; varying vec2 vXZ;
-varying float vDem; uniform sampler2D uDemMask; uniform float uDemOn; uniform vec4 uDemK;
+varying float vDem; uniform sampler2D uDemMask; uniform float uDemOn; uniform vec4 uDemK; uniform sampler2D uCoast; uniform vec4 uCoastK;
 uniform float uDayLight; uniform float uSunUp; uniform sampler2D uShadow; uniform float uShadowOn; uniform vec4 uShadowBox; uniform float uCover;
 uniform sampler2D uWx; uniform sampler2D uWx2; uniform vec3 uLight; uniform float uHaveWx;
 uniform float uMode; uniform float uOpac; uniform float uIso; uniform float uIsoStep; uniform vec2 uMs;
@@ -142,23 +142,29 @@ void main(){
     if(texture2D(uDemMask, mc).r > 0.5 && texture2D(uDemMask, mc + vec2(e.x, 0.0)).r > 0.5 && texture2D(uDemMask, mc - vec2(e.x, 0.0)).r > 0.5
        && texture2D(uDemMask, mc + vec2(0.0, e.y)).r > 0.5 && texture2D(uDemMask, mc - vec2(0.0, e.y)).r > 0.5) discard;
   }
+  // land or sea: the OpenStreetMap coastline masks near the view (coast3d.py), else the DEM's land at the vertices
+  float lnd = vLand;
+  if(uCoastK.w > 0.5){
+    vec2 cc = (vUv * uDemK.xy - 0.5 - uCoastK.xy) / uCoastK.z;
+    if(cc.x > 0.0 && cc.y > 0.0 && cc.x < 1.0 && cc.y < 1.0){ vec2 m = texture2D(uCoast, cc).rg; if(m.g > 0.99) lnd = m.r > 0.5 ? 1.0 : 0.0; }
+  }
   vec3 n = normalize(vN);
   float diff = max(dot(n, uLight), 0.0);
-  vec3 c = vLand < 0.5 ? vec3(.07,.19,.27) : hyps(vH);
-  float shade = vLand < 0.5 ? 0.75 + 0.25 * diff : 0.32 + 0.78 * diff;
+  vec3 c = lnd < 0.5 ? vec3(.07,.19,.27) : hyps(vH);
+  float shade = lnd < 0.5 ? 0.75 + 0.25 * diff : 0.32 + 0.78 * diff;
   if(uHaveWx > 0.5){
     vec4 w = texture2D(uWx, vUv), w2 = texture2D(uWx2, vUv);
     if(uMode < 0.5){
       float pr = w.r * w.r * ${PRHI.toFixed(1)}, zs = w.g * ${ZSHI.toFixed(1)};
       if(pr >= 0.1){
         float lv = log(pr) / log(10.0);
-        vec3 pc = (vLand > 0.5 && vH >= zs) ? rampSnow(lv) : rampRain(lv);
+        vec3 pc = (lnd > 0.5 && vH >= zs) ? rampSnow(lv) : rampRain(lv);
         c = mix(c, pc, clamp(uOpac / 0.85 * (0.35 + 0.5 * clamp((lv + 1.0) / 1.3, 0.0, 1.0)), 0.0, 1.0)); // light rain lets the terrain show through
       }
     } else if(uMode < 1.5){
-      c = mix(c, rampT(w2.r * 80.0 - 33.15), uOpac) * (vLand < 0.5 ? 0.78 : 1.0); shade = 0.62 + 0.42 * diff;
+      c = mix(c, rampT(w2.r * 80.0 - 33.15), uOpac) * (lnd < 0.5 ? 0.78 : 1.0); shade = 0.62 + 0.42 * diff;
     } else if(uMode < 2.5){
-      c = mix(c, rampW(w2.g * 180.0), uOpac) * (vLand < 0.5 ? 0.8 : 1.0); shade = vLand < 0.5 ? 0.8 + 0.2 * diff : 0.5 + 0.6 * diff;
+      c = mix(c, rampW(w2.g * 180.0), uOpac) * (lnd < 0.5 ? 0.8 : 1.0); shade = lnd < 0.5 ? 0.8 + 0.2 * diff : 0.5 + 0.6 * diff;
     }
     if(uCover > 0.5){ // fallback without volumetric clouds: total cloud cover as a white veil
       c = mix(c, vec3(.93,.95,.97), smoothstep(.15, 1., w2.a) * .5);
@@ -217,6 +223,7 @@ function makeTerrain() {
       uTemp: { value: TU.cols }, uTempV: { value: TU.vals }, uWind: { value: WU.cols }, uWindV: { value: WU.vals },
       uDayLight: { value: 1 }, uSunUp: { value: 1 }, uShadow: { value: null }, uShadowOn: { value: 0 }, uShadowBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uCover: { value: 0 },
       uDemMask: { value: demMaskTex }, uDemOn: { value: 0 }, uDemK: { value: new THREE.Vector4(G.nx, G.ny, 1, 1) },
+      uCoast: { value: coastTex }, uCoastK: { value: new THREE.Vector4(0, 0, 1, 0) },
       uMode: { value: MODE }, uOpac: { value: OPAC[MODE] ?? 1 }, uIso: { value: 0 }, uIsoStep: { value: 4 }, uMs: { value: new THREE.Vector2(980, 1040) },
     },
   });
@@ -312,13 +319,64 @@ async function loadDemTile(lev, tj, ti) {
   demLoading--;
   demKey = "";
 }
+// ---------- sharp coastline (OpenStreetMap land polygons, coast3d.py): masks of ~40 m pixels on the finest close-up
+// tiles, gathered around the look-at point into one texture (R land 0..255, anti-aliased; G 255 where known) that the
+// terrain shader reads per pixel; elsewhere the land of the DEM at the vertices ----------
+let COAST = null, coastTex = null, coastData = null, coastKey = "", coastClock = 0;
+const COAST_W = 6, coastPng = new Map();
+async function loadCoastMeta() {
+  COAST = null;  // dem.json says whether this page has coast masks (coast3d.py)
+  if (DEM && DEM.coast) try { const r = await fetch(DEMDIR + "coast/index.json"); COAST = r.ok ? await r.json() : null; } catch (e) { COAST = null; }
+  const n = COAST ? COAST_W * COAST.M : 1;
+  coastData = new Uint8Array(n * n * 2);
+  coastTex = new THREE.DataTexture(coastData, n, n, THREE.RGFormat, THREE.UnsignedByteType);
+  coastTex.minFilter = coastTex.magFilter = THREE.LinearFilter; coastTex.unpackAlignment = 1; coastTex.needsUpdate = true;
+  if (terrainMesh) terrainMesh.material.uniforms.uCoast.value = coastTex;
+}
+function coastFill(c0, r0) {  // the W x W tiles from tile column c0, row r0
+  const M = COAST.M, n = COAST_W * M;
+  coastData.fill(0);
+  for (let b = 0; b < COAST_W; b++) for (let a = 0; a < COAST_W; a++) {
+    const tj = r0 + b, ti = c0 + a;
+    if (tj < 0 || ti < 0 || tj >= COAST.ntj || ti >= COAST.nti) continue;
+    const st = COAST.status[tj * COAST.nti + ti];
+    let px = null;
+    if (st === "2") { px = coastPng.get(tj + "_" + ti); if (!px) continue; } else if (st !== "0" && st !== "1") continue;
+    for (let r = 0; r < M; r++) {
+      let o = 2 * ((b * M + r) * n + a * M);
+      for (let c = 0; c < M; c++, o += 2) { coastData[o] = px ? px[4 * (r * M + c)] : st === "1" ? 255 : 0; coastData[o + 1] = 255; }
+    }
+  }
+  coastTex.needsUpdate = true;
+}
+function updateCoast(now) {
+  if (!COAST || !terrainMesh || now - coastClock < 300) return;
+  coastClock = now;
+  const u = terrainMesh.material.uniforms, T = COAST.T;
+  const on = DEM && $("dem").checked && camera.position.distanceTo(controls.target) < 3.0 * DEM.levels[0].T * G.kx;
+  if (!on) { u.uCoastK.value.w = 0; coastKey = ""; return; }
+  const c0 = Math.round(iOfX(controls.target.x) / T - COAST_W / 2), r0 = Math.round(jOfZ(controls.target.z) / T - COAST_W / 2);
+  let missing = 0;
+  for (let b = 0; b < COAST_W; b++) for (let a = 0; a < COAST_W; a++) {
+    const tj = r0 + b, ti = c0 + a, k = tj + "_" + ti;
+    if (tj < 0 || ti < 0 || tj >= COAST.ntj || ti >= COAST.nti || COAST.status[tj * COAST.nti + ti] !== "2" || coastPng.has(k)) continue;
+    missing++; coastPng.set(k, null);
+    loadPixels(`${DEMDIR}coast/${k}.png`).then((im) => { coastPng.set(k, new Uint8Array(im.rgba)); coastKey = ""; })
+      .catch(() => coastPng.set(k, new Uint8Array(4 * COAST.M * COAST.M)));
+  }
+  const key = c0 + "_" + r0 + "_" + [...coastPng.values()].filter(Boolean).length;
+  if (key !== coastKey) { coastKey = key; coastFill(c0, r0); }
+  if (coastPng.size > 200) for (const [k, v] of coastPng) { if (coastPng.size <= 120) break; const [tj, ti] = k.split("_").map(Number); if (v && (tj < r0 || tj >= r0 + COAST_W || ti < c0 || ti >= c0 + COAST_W)) coastPng.delete(k); }
+  u.uCoast.value = coastTex; u.uCoastK.value.set(c0 * T, r0 * T, COAST_W * T, 1);
+}
 // ---------- 3D buildings (OpenStreetMap footprints, osm3d.py): tiles of the finest close-up terrain level, loaded
 // within ~20 km of the view while the close-up terrain is on; true height on the exaggerated terrain, walls reaching
 // 20 m below the lowest ground of the outline ----------
 let BLD = null, bldClock = 0, bldLoading = 0, bldMat = null, bldSun = null, bldAmb = null;
 const bldTiles = new Map();
 async function loadBldMeta() {
-  try { const r = await fetch(BLDDIR + "index.json"); BLD = r.ok ? await r.json() : null; } catch (e) { BLD = null; }
+  BLD = null;  // dem.json says whether this page has buildings (osm3d.py), so other pages make no request
+  if (DEM && DEM.bld) try { const r = await fetch(BLDDIR + "index.json"); BLD = r.ok ? await r.json() : null; } catch (e) { BLD = null; }
   $("bldRow").hidden = !BLD;
   if (!BLD) return;
   BLD.n = new Map(BLD.tiles.map((t) => [t[0] + "_" + t[1], t[2]]));
@@ -1718,7 +1776,7 @@ function frame(now) {
   if (cloudMesh && TIERS[QUAL]) { const u = cloudMesh.material.uniforms; u.uNear.value = Math.max(4, 0.35 * dist); u.uSteps.value = moving ? TIERS[QUAL].move : TIERS[QUAL].steps; }
   camera.near = Math.max(0.2, dist / 2000); camera.far = dist * 20 + 2000; camera.updateProjectionMatrix();
   if (marker) marker.scale.setScalar(Math.max(0.15, camera.position.distanceTo(marker.position) / 160));
-  if (REG) { updateDem(now); updateBld(now); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
+  if (REG) { updateDem(now); updateCoast(now); updateBld(now); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
   renderer.render(scene, camera);
   if (cloudMesh && cloudMesh.visible) {
     updateTerrainShadow();
@@ -1818,6 +1876,7 @@ async function main() {
   makeLabels();
   for (const r of M.terrain.regions) $("view").append(new Option(r.name, r.id));
   await loadDemMeta();
+  await loadCoastMeta();
   await loadBldMeta();
   await loadRegion("all", true);
   $("dem").onchange = () => { demKey = ""; demClock = 0; };
@@ -1901,6 +1960,6 @@ async function main() {
     camera.position.copy(c).add(new THREE.Vector3(Math.sin(az * r) * Math.cos(tilt * r), Math.sin(tilt * r), Math.cos(az * r) * Math.cos(tilt * r)).multiplyScalar(dist));
     controls.update();
   };
-  window.FIAB3D = { setHour, loadRegion, sceneOf, terrainAt, exag, camera, controls, lookAt, get hour() { return hour; } }; // for scripted views and tests
+  window.FIAB3D = { setHour, loadRegion, sceneOf, terrainAt, exag, camera, controls, lookAt, get hour() { return hour; }, get terrain() { return terrainMesh; } }; // for scripted views and tests
 }
 main();
