@@ -249,7 +249,7 @@ function setHeights() {
   terrainGeo.computeBoundingSphere();
   terrainMesh.material.uniforms.uScale.value = e;
   for (const t of demTiles.values()) if (t.mesh) demHeights(t, e);
-  for (const t of bldTiles.values()) if (t.mesh) bldHeights(t, e);
+  if (bldMat) bldMat.userData.uExag.value = e; // also before any building tile is loaded (zoomed out)
   for (const L of LMK) lmkHeights(L, e);
   $("exagV").textContent = e + "×";
   for (const q of particles || []) q.hist.length = 0;
@@ -379,6 +379,7 @@ async function loadBldMeta() {
   BLD = null;  // dem.json says whether this page has buildings (osm3d.py), so other pages make no request
   if (DEM && DEM.bld) try { const r = await fetch(BLDDIR + "index.json"); BLD = r.ok ? await r.json() : null; } catch (e) { BLD = null; }
   $("bldRow").hidden = !BLD;
+  setupTour();
   if (!BLD) return;
   BLD.n = new Map(BLD.tiles.map((t) => [t[0] + "_" + t[1], t[2]]));
   bldMat = new THREE.MeshLambertMaterial({ color: 0xd9d3c9, side: THREE.DoubleSide });
@@ -393,7 +394,6 @@ async function loadBldMeta() {
   bldAmb = new THREE.HemisphereLight(0xe4ecf2, 0x6b6258, 1.15);
   scene.add(bldSun, bldSun.target, bldAmb);
 }
-function bldHeights(t, e) { if (bldMat) bldMat.userData.uExag.value = e; }
 async function loadBldTile(tj, ti) {
   // typed arrays sized from a first pass over the records (an iPhone tab dies on JS arrays of millions of vertices);
   // indexed: roof rings share their vertices, each wall is one quad of 4 vertices with its own flat normal
@@ -1302,9 +1302,10 @@ function FMTUTC(ms) { const d = new Date(ms); return `${d.getUTCDate()} ${d.toLo
 async function selectRun() {
   model = M.models.find((m) => m.id === $("model").value);
   run = model.runs.find((r) => r.key === $("run").value) || model.runs[0];
-  status("Loading…");
+  const head = issued();
+  status(head + "Loading…");
   try {
-    const r = await loadRun(model, run, (d, n) => status(`Loading ${Math.round(100 * d / n)} %`));
+    const r = await loadRun(model, run, (d, n) => status(`${head}Loading ${Math.round(100 * d / n)} %`));
     if (r.mid !== model.id || r.key !== run.key) return;
     R = r;
     dropVolumes();
@@ -1320,19 +1321,31 @@ async function selectRun() {
 }
 
 const startMs = () => (run.t0 - 3600 * (run.off || 0)) * 1000;
-function status(t) { $("status").textContent = t; $("status").style.display = t ? "block" : "none"; }
+// "Forecast for the next 3 days issued on <start, local time> (<UTC>)", shown while a forecast run loads
+function issued() {
+  if (model.kind === "analysis") return "";
+  const h = (run.nt - 1) * run.step + (run.off || 0), t = startMs();
+  const span = h % 24 ? `${h} hours` : h === 24 ? "day" : `${h / 24} days`;
+  return `Forecast for the next ${span} issued on ${FMT.format(new Date(t))} ${zoneName(t)} (${FMTUTC(t)})\n`;
+}
+function status(t) { const e = $("status"); e.textContent = t; e.style.display = t ? "block" : "none"; e.style.whiteSpace = "pre-line"; e.style.textAlign = "center"; }
 
 // ---------- inspect, marker and meteogram ----------
 let selected = null, marker = null;
 function placeMarker() {
-  if (marker) { scene.remove(marker); marker.geometry.dispose(); marker = null; }
+  if (marker) { scene.remove(marker); marker.traverse((o) => o.geometry?.dispose()); marker.userData.mat.dispose(); marker = null; }
   if (!selected) return;
   const y = terrainAt(selected.x, selected.z) / 1000 * exag();
-  const g = new THREE.CylinderGeometry(0.0, 2.2, 9, 12); // unit size, scaled with the camera distance every frame
-  g.rotateX(Math.PI);
-  g.translate(0, 4.5, 0);
-  marker = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf0b44c }));
-  marker.position.set(selected.x, (Number.isFinite(y) ? y : 0) + 0.2, selected.z);
+  // a pin of unit size, scaled with the camera distance every frame (constant size on screen), drawn over the buildings:
+  // a pulsing ring on the ground, a thin stem and a round head
+  const mat = new THREE.MeshBasicMaterial({ color: 0xf0b44c, depthTest: false, transparent: true, opacity: 0.95 });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 1, 40).rotateX(-Math.PI / 2), mat);
+  const parts = [ring, new THREE.Mesh(new THREE.CircleGeometry(0.18, 20).rotateX(-Math.PI / 2), mat),
+    new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 6).translate(0, 1.1, 0), mat), new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12).translate(0, 2.2, 0), mat)];
+  marker = new THREE.Group();
+  for (const o of parts) { o.renderOrder = 10; marker.add(o); }
+  marker.userData = { ring, mat };
+  marker.position.set(selected.x, (Number.isFinite(y) ? y : 0) + 0.002, selected.z);
   scene.add(marker);
 }
 
@@ -1540,12 +1553,12 @@ function orbitEye(o) {
   const x = o.c.x + D * Math.sin(o.a), z = o.c.z + D * Math.cos(o.a), g = terrainAt(x, z);
   return new THREE.Vector3(x, Math.max(y, (Number.isFinite(g) ? g / 1000 : 0) * e + 0.3 * e), z);
 }
-function startOrbit(x, z, name) {
+function startOrbit(x, z, name, zoom) {
   const g = terrainAt(x, z), ground = Number.isFinite(g) ? Math.max(0, g) / 1000 : 0, e = exag();
   const c = new THREE.Vector3(x, ground * e, z), v = camera.position.clone().sub(c);
   orbit = { c, ground, a: Math.atan2(v.x, v.z), pending: true, on: false, name };
   const eye = orbitEye(orbit);
-  fly = { t: 0, dur: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.01 : 3.5, p0: camera.position.clone(), q0: controls.target.clone(), q1: c, p1: eye };
+  fly = { t: 0, dur: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.01 : zoom ? 7 : 3.5, p0: camera.position.clone(), q0: controls.target.clone(), q1: c, p1: eye, zoom };
   $("orbitBox").hidden = false;
   $("orbName").textContent = name || "";
   $("orbStop").textContent = "Stop orbit";
@@ -1555,6 +1568,46 @@ function stepOrbit(dt) {
   orbit.a += 2 * Math.PI * dt / Number($("orbT").value);
   camera.position.copy(orbitEye(orbit));
   controls.target.copy(orbit.c);
+}
+// ---------- tour: fly down into an orbit of the pilot city (the 3D buildings) and back out to the whole domain ----------
+// zoom-style flight: the distance changes geometrically and the view angles turn smoothly; the look-at point moves with
+// the distance, so going in it reaches the city while high up and then descends, going out it climbs first
+const _s0 = new THREE.Spherical(), _s1 = new THREE.Spherical(), _o = new THREE.Vector3();
+function flyZoom(f, e) {
+  if (!f.s0) {
+    f.s0 = _s0.setFromVector3(_o.copy(f.p0).sub(f.q0)).clone(); f.s1 = _s1.setFromVector3(_o.copy(f.p1).sub(f.q1)).clone();
+    f.s1.theta = f.s0.theta + ((f.s1.theta - f.s0.theta + 3 * Math.PI) % (2 * Math.PI) - Math.PI); // the short way round
+  }
+  const r = f.s0.radius * (f.s1.radius / f.s0.radius) ** e, u = Math.abs(f.s1.radius - f.s0.radius) > 1e-6 ? (r - f.s0.radius) / (f.s1.radius - f.s0.radius) : e;
+  controls.target.lerpVectors(f.q0, f.q1, u);
+  _s0.set(r, f.s0.phi + (f.s1.phi - f.s0.phi) * e, f.s0.theta + (f.s1.theta - f.s0.theta) * e);
+  camera.position.copy(controls.target).add(_o.setFromSpherical(_s0));
+}
+const short = (s) => ({ California: "CA", "San Francisco": "SF" })[s] || (/\s/.test(s) ? s.split(/\s+/).map((w) => w[0]).join("").toUpperCase() : s);
+let TOUR = null;
+function setupTour() {
+  if (!$("tourCity")) return; // a page made before the tour buttons
+  const c = BLD && TOWNS.find((t) => t[0] === BLD.area), all = M.terrain.regions[0];
+  $("tourCity").hidden = $("tourAll").hidden = !c;
+  if (!c) return;
+  TOUR = { name: c[0], lat: c[1], lon: c[2] };
+  $("tourCity").textContent = short(c[0]) + " 🔄"; $("tourCity").title = `Fly into an orbit of ${c[0]}`;
+  $("tourAll").textContent = short(all.name) + " 🗺️"; $("tourAll").title = `Fly out to the whole of ${all.name}`;
+}
+async function tourCity() {
+  let [x, z] = sceneOf(TOUR.lat, TOUR.lon);
+  if (!Number.isFinite(terrainAt(x, z))) { $("view").value = M.terrain.regions[0].id; await loadRegion(M.terrain.regions[0].id, true); [x, z] = sceneOf(TOUR.lat, TOUR.lon); }
+  $("orbH").value = 1.5; $("orbD").value = 10; $("orbT").value = 90; orbitReadouts();
+  if (!$("dem").checked) { $("dem").checked = true; $("dem").dispatchEvent(new Event("change")); }
+  if ($("bld") && !$("bld").checked) { $("bld").checked = true; $("bld").dispatchEvent(new Event("change")); }
+  startOrbit(x, z, TOUR.name, true);
+}
+async function tourAll() {
+  if (orbit) { orbit.on = false; orbit.pending = false; orbit = null; $("orbitBox").hidden = true; }
+  const all = M.terrain.regions[0].id;
+  if (REG.id !== all) { $("view").value = all; await loadRegion(all); return; }
+  const { tgt, dir, dist } = regionView();
+  fly = { t: 0, dur: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.01 : 6, p0: camera.position.clone(), q0: controls.target.clone(), q1: tgt, p1: tgt.clone().add(dir.multiplyScalar(dist)), zoom: true };
 }
 function stopOrbit() { if (orbit) { orbit.on = false; orbit.pending = false; $("orbStop").textContent = "Resume orbit"; } }
 function portraitView() {  // land principal axis -> {tgt, dir, dist}, or null (landscape screen, little land)
@@ -1580,12 +1633,16 @@ function portraitView() {  // land principal axis -> {tgt, dir, dist}, or null (
   const dir = new THREE.Vector3(u[0] * 0.62, el, u[1] * 0.62).normalize();
   return { tgt, dir, dist };
 }
-function resetView(instant) {
+function regionView() {
   let tgt = new THREE.Vector3(xOfI((REG.i0 + REG.i1) / 2), 0, zOfJ((REG.j0 + REG.j1) / 2));
   const size = Math.max(regW() / Math.max(camera.aspect, 0.6), regH());
   let dir = new THREE.Vector3(0, 0.78, 0.62).normalize(), dist = size * 1.05;
   controls.maxDistance = size * 3;
   const pv = portraitView(); if (pv) ({ tgt, dir, dist } = pv);
+  return { tgt, dir, dist };
+}
+function resetView(instant) {
+  const { tgt, dir, dist } = regionView();
   if (instant) { controls.target.copy(tgt); camera.position.copy(tgt.clone().add(dir.multiplyScalar(dist))); controls.update(); }
   else flyTo(tgt, dist, dir);
 }
@@ -1842,8 +1899,8 @@ function frame(now) {
   if (fly) {
     fly.t = Math.min(1, fly.t + dt / (fly.dur || 1.1));
     const e = fly.t < 0.5 ? 2 * fly.t * fly.t : 1 - (-2 * fly.t + 2) ** 2 / 2;
-    camera.position.lerpVectors(fly.p0, fly.p1, e);
-    controls.target.lerpVectors(fly.q0, fly.q1, e);
+    if (fly.zoom) flyZoom(fly, e);
+    else { camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); }
     if (fly.t >= 1) { fly = null; if (orbit && orbit.pending) { orbit.pending = false; orbit.on = true; } }
   }
   if (orbit && orbit.on && !fly) stepOrbit(dt);
@@ -1858,7 +1915,7 @@ function frame(now) {
   if (mv !== moving) { moving = mv; resizeCloudRT(); }
   if (cloudMesh && TIERS[QUAL]) { const u = cloudMesh.material.uniforms; u.uNear.value = Math.max(4, 0.35 * dist); u.uSteps.value = moving ? TIERS[QUAL].move : TIERS[QUAL].steps; }
   camera.near = Math.max(0.2, dist / 2000); camera.far = dist * 20 + 2000; camera.updateProjectionMatrix();
-  if (marker) marker.scale.setScalar(Math.max(0.15, camera.position.distanceTo(marker.position) / 160));
+  if (marker) { marker.scale.setScalar(camera.position.distanceTo(marker.position) * 0.018); marker.userData.ring.scale.setScalar(1 + 0.3 * Math.abs(Math.sin(now / 500))); }
   if (REG) { updateDem(now); updateCoast(now); updateBld(now); updateLandmarks(); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
   renderer.render(scene, camera);
   if (cloudMesh && cloudMesh.visible) {
@@ -1928,7 +1985,7 @@ function legend() {
 async function main() {
   legend();
   try {
-    [M, TOWNS] = await Promise.all([fetch(DATA + "meta.json").then((r) => r.json()), fetch(DATA + "towns.json").then((r) => r.json())]);
+    [M, TOWNS] = await Promise.all([fetch(DATA + "meta.json", { cache: "no-cache" }).then((r) => r.json()), fetch(DATA + "towns.json").then((r) => r.json())]);
   } catch (e) { status("Could not load the data: " + e.message); return; }
   G = M.grid; GR = C.makeGrid(G); N = G.nx * G.ny; CX = (G.nx - 1) / 2; CZ = (G.ny - 1) / 2;
   for (const f in M.enc) DEC[f] = C.decoder(M.enc[f]);
@@ -1997,6 +2054,7 @@ async function main() {
   $("prev").onclick = () => setHour(hour - 1);
   $("next").onclick = () => setHour(hour + 1);
   $("peak").onclick = () => setHour(run.peak || 0);
+  if ($("tourCity")) { $("tourCity").onclick = tourCity; $("tourAll").onclick = tourAll; }
   $("play").onclick = () => togglePlay();
   $("exag").oninput = setHeights;
   $("view").onchange = () => loadRegion($("view").value, false);

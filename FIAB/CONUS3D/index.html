@@ -75,8 +75,8 @@ body.bare #time{display:none}body.bare #ftb{display:flex}body.bare #mg{display:n
 #ctrl{display:none;left:8px;right:8px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);max-height:calc(100dvh - 330px);z-index:4}
 body.sheet #ctrl{display:block}
 #time{left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px}
-#time #hour{order:1;margin:4px 0 0}#time .row{order:2;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-#time .row button,#time .row select{width:100%;padding:9px 4px;font-size:14px;white-space:nowrap}
+#time #hour{order:1;margin:4px 0 0}#time .row{order:2;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}#time .row:has(#tourCity:not([hidden])){grid-template-columns:repeat(5,1fr)}
+#time .row button,#time .row select{width:100%;padding:9px 4px;font-size:14px;white-space:nowrap}#time .row:has(#tourCity:not([hidden])) :is(button,select){padding:9px 2px;font-size:13px}
 #when,#lead,#ends,#hide{display:none}#setBtn{display:block;grid-column:span 2}
 #info,#compass{display:none}
 #mg{left:8px;width:calc(100vw - 16px);bottom:calc(env(safe-area-inset-bottom,0px) + 150px);max-height:50vh;min-width:0;resize:none}
@@ -116,7 +116,7 @@ body.sheet #ctrl{display:block}
   <label class="l" for="run">Period</label><select id="run"></select>
   <label class="l" for="view">Explore</label>
   <select id="view"></select>
-  <label class="l" for="exag">Terrain height <b id="exagV">8×</b></label><input id="exag" type="range" min="1" max="20" step="0.5" value="8">
+  <label class="l" for="exag">Terrain height <b id="exagV">1×</b></label><input id="exag" type="range" min="1" max="20" step="0.5" value="1">
   <div id="demRow" hidden><div class="chk"><input type="checkbox" id="dem" checked><label for="dem">Close-up terrain (90 m DEM) <b id="demV" style="font-weight:400;color:var(--ink3)"></b></label></div>
     <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Loads finer relief as you zoom in; with it, 1–2× height looks natural. Copernicus DEM GLO-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA.</div></div>
   <div id="bldRow" hidden><div class="chk"><input type="checkbox" id="bld" checked><label for="bld">3D buildings <b id="bldV" style="font-weight:400;color:var(--ink3)"></b></label></div>
@@ -197,7 +197,7 @@ body.sheet #ctrl{display:block}
 </section>
 
 <div id="time" class="card">
-  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" class="opt" title="Hour with the most precipitation over land">Peak rain</button><button id="now" class="opt" title="The current hour, when it is inside the forecast">Now</button><select id="speed" class="opt" title="Playback speed" style="width:auto"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="hide" title="Hide or show the panels (key H)">Hide controls</button><button id="setBtn" aria-expanded="false">Settings</button>
+  <div class="row"><button id="play">▶ Play</button><button id="prev">−1 h</button><button id="next">+1 h</button><button id="peak" class="opt" title="Hour with the most precipitation over land">Peak rain</button><button id="now" class="opt" title="The current hour, when it is inside the forecast">Now</button><button id="tourCity" hidden>City 🔄</button><button id="tourAll" hidden>All 🗺️</button><select id="speed" class="opt" title="Playback speed" style="width:auto"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="hide" title="Hide or show the panels (key H)">Hide controls</button><button id="setBtn" aria-expanded="false">Settings</button>
     <span id="when"></span><span id="lead"></span></div>
   <input id="hour" type="range" min="0" max="72" value="0" aria-label="Hour">
   <div id="ends"><span id="t0"></span><span id="interp">hourly frames interpolated</span><span id="t1"></span></div>
@@ -208,7 +208,7 @@ body.sheet #ctrl{display:block}
   <select id="fSpeed" title="Playback speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select>
   <button id="fNow">Now</button><button id="fRec" title="Record">●</button><button id="fHide">☰ Controls</button></div>
 
-<script type="module" src="geo3d.js?v=202611192300"></script>
+<script type="module" src="geo3d.js?v=202611202008"></script>
 <script src="../brand.js" data-pos="tc" defer></script>
 </body>
 </html>
