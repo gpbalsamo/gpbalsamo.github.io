@@ -118,7 +118,7 @@ body.sheet #ctrl{display:block}
   <select id="view"></select>
   <label class="l" for="exag">Terrain height <b id="exagV">1×</b></label><input id="exag" type="range" min="1" max="20" step="0.5" value="1">
   <div id="demRow" hidden><div class="chk"><input type="checkbox" id="dem" checked><label for="dem">Close-up terrain (90 m DEM) <b id="demV" style="font-weight:400;color:var(--ink3)"></b></label></div>
-    <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Loads finer relief as you zoom in; with it, 1–2× height looks natural. Copernicus DEM GLO-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA.</div></div>
+    <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Loads finer relief as you zoom in; with it, 1–2× height looks natural. Copernicus DEM GLO-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA. Aerial photos (San Francisco Bay Area): USDA National Agriculture Imagery Program (NAIP), public domain.</div></div>
   <div id="bldRow" hidden><div class="chk"><input type="checkbox" id="bld" checked><label for="bld">3D buildings <b id="bldV" style="font-weight:400;color:var(--ink3)"></b></label></div>
     <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Appear within ~20 km of the view, at true height on the close-up terrain (pilot area). Heights from OpenStreetMap tags, else typical for the building type. © OpenStreetMap contributors.</div></div>
   <label class="l" for="spd">Wind trail speed</label><input id="spd" type="range" min="0.2" max="3" step="0.1" value="1">
@@ -208,7 +208,7 @@ body.sheet #ctrl{display:block}
   <select id="fSpeed" title="Playback speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select>
   <button id="fNow">Now</button><button id="fRec" title="Record">●</button><button id="fHide">☰ Controls</button></div>
 
-<script type="module" src="geo3d.js?v=202611221424"></script>
+<script type="module" src="geo3d.js?v=202611221603"></script>
 <script src="../brand.js" data-pos="tc" defer></script>
 </body>
 </html>

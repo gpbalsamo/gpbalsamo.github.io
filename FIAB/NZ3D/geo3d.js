@@ -62,6 +62,18 @@ renderer.setSize(innerWidth, innerHeight);
 $("scene").append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#0d1820");
+scene.fog = new THREE.Fog(0x8c9eb3, 1e5, 2e5);  // buildings and landmarks (built-in materials); the terrain does its own haze
+// sky: a gradient dome around the camera, the haze colour at the horizon to a deeper blue overhead, dark at night
+const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+  uniforms: { uHaze: { value: new THREE.Color(0.55, 0.62, 0.70) }, uDay: { value: 1 } },
+  vertexShader: `varying vec3 vD; void main(){ vD = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
+  fragmentShader: `varying vec3 vD; uniform vec3 uHaze; uniform float uDay;
+  void main(){ float h = normalize(vD).y; vec3 top = mix(vec3(.03,.05,.09), vec3(.30,.48,.72), uDay);
+    gl_FragColor = vec4(mix(uHaze, top, smoothstep(0.0, 0.45, h)) * (h < -0.02 ? 0.85 : 1.0), 1.0); }`,
+}));
+sky.scale.setScalar(1000); sky.renderOrder = -10; sky.frustumCulled = false;
+scene.add(sky);
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 1, 60000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -89,10 +101,12 @@ const TU = linUniform(C.TEMP), WU = linUniform(C.WSPD);
 const terrainVS = `
 attribute float land; attribute float dem;
 varying vec2 vUv; varying float vH; varying float vLand; varying vec3 vN; varying vec2 vXZ; varying float vDem;
+varying vec3 vW; varying float vDepth;
 uniform float uScale;
 void main(){
   vDem = dem; vUv = uv; vH = position.y / uScale * 1000.0; vLand = land; vN = normalize(normal); vXZ = position.xz;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vW = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
 }`;
 const terrainFS = `
 precision highp float;
@@ -100,13 +114,15 @@ varying vec2 vUv; varying float vH; varying float vLand; varying vec3 vN; varyin
 varying float vDem; uniform sampler2D uDemMask; uniform float uDemOn; uniform vec4 uDemK; uniform sampler2D uCoast; uniform vec4 uCoastK;
 uniform float uDayLight; uniform float uSunUp; uniform sampler2D uShadow; uniform float uShadowOn; uniform vec4 uShadowBox; uniform float uCover;
 uniform sampler2D uWx; uniform sampler2D uWx2; uniform vec3 uLight; uniform float uHaveWx;
+varying vec3 vW; varying float vDepth; uniform vec3 uCam; uniform vec3 uFogC; uniform vec2 uFogD; uniform float uTime;
+uniform sampler2D uOrtho; uniform vec4 uOrthoK;
 uniform float uMode; uniform float uOpac; uniform float uIso; uniform float uIsoStep; uniform vec2 uMs;
 uniform vec3 uTemp[${C.TEMP.length}]; uniform float uTempV[${C.TEMP.length}];
 uniform vec3 uWind[${C.WSPD.length}]; uniform float uWindV[${C.WSPD.length}];
 uniform vec3 uRain[${C.RAIN.length}]; uniform float uRainV[${C.RAIN.length}];
 uniform vec3 uSnow[${C.SNOW.length}]; uniform float uSnowV[${C.SNOW.length}];
 vec3 hyps(float h){
-  vec3 c0=vec3(.31,.48,.29), c1=vec3(.44,.58,.33), c2=vec3(.63,.64,.42), c3=vec3(.55,.46,.35), c4=vec3(.55,.53,.51), c5=vec3(.86,.87,.89);
+  vec3 c0=vec3(.33,.43,.29), c1=vec3(.45,.51,.34), c2=vec3(.60,.58,.43), c3=vec3(.55,.47,.37), c4=vec3(.55,.53,.51), c5=vec3(.86,.87,.89);  // closer to the aerial photos' colours
   if(h<300.) return mix(c0,c1,clamp(h/300.,0.,1.));
   if(h<800.) return mix(c1,c2,(h-300.)/500.);
   if(h<1500.) return mix(c2,c3,(h-800.)/700.);
@@ -150,8 +166,24 @@ void main(){
   }
   vec3 n = normalize(vN);
   float diff = max(dot(n, uLight), 0.0);
-  vec3 c = lnd < 0.5 ? vec3(.07,.19,.27) : hyps(vH);
+  vec3 c = lnd < 0.5 ? vec3(.10,.23,.32) : hyps(vH);
   float shade = lnd < 0.5 ? 0.75 + 0.25 * diff : 0.32 + 0.78 * diff;
+  vec3 V = normalize(uCam - vW);
+  if(lnd > 0.5 && uOrthoK.w > 0.5){ // aerial imagery (ortho3d.py, NAIP) near the view; black = no image; faded at the window edge
+    vec2 oc = (vUv * uDemK.xy - 0.5 - uOrthoK.xy) / uOrthoK.z;
+    if(oc.x > 0.0 && oc.y > 0.0 && oc.x < 1.0 && oc.y < 1.0){
+      vec3 o = texture2D(uOrtho, oc).rgb;
+      float e = smoothstep(0.0, 0.12, min(min(oc.x, oc.y), min(1.0 - oc.x, 1.0 - oc.y))) * step(0.012, max(o.r, max(o.g, o.b)));
+      c = mix(c, o * 1.06, e); shade = mix(shade, 0.70 + 0.40 * diff, e);  // the photo has its own shadows: softer shading
+    }
+  }
+  float glint = 0.0;
+  if(lnd < 0.5){ // water: small moving ripples, sun glint, brighter towards the horizon (Fresnel)
+    vec2 q = vXZ * 60.0; float t = uTime * 0.6, fw = clamp(1.0 - fwidth(q.x) * 0.6, 0.0, 1.0);
+    vec3 wn = normalize(vec3(fw * 0.06 * (sin(q.x * 1.7 + t) + sin(q.y * 2.3 - 1.3 * t) * 0.6), 1.0, fw * 0.06 * (cos(q.y * 1.9 + t) + cos(q.x * 2.9 + 0.7 * t) * 0.6)));
+    glint = pow(max(dot(reflect(-uLight, wn), V), 0.0), 120.0) * 0.9 * uSunUp;
+    c = mix(c, vec3(.47,.58,.66), pow(1.0 - max(V.y, 0.0), 4.0) * 0.6);
+  }
   if(uHaveWx > 0.5){
     vec4 w = texture2D(uWx, vUv), w2 = texture2D(uWx2, vUv);
     if(uMode < 0.5){
@@ -180,7 +212,10 @@ void main(){
     float T = texture2D(uShadow, (vXZ - uShadowBox.xy) / (uShadowBox.zw - uShadowBox.xy)).r;
     shade = mix(shade, shade * (0.45 + 0.55 * T), uSunUp);
   }
-  gl_FragColor = vec4(c * shade * uDayLight, 1.0);
+  vec3 col = (c * shade + glint) * uDayLight;
+  float fog = clamp((vDepth - uFogD.x) / max(uFogD.y - uFogD.x, 1e-3), 0.0, 1.0);  // aerial haze with distance
+  col = mix(col, uFogC, fog * fog * 0.85);
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 let wx2Tex = null, wx2Data = null;
@@ -224,6 +259,8 @@ function makeTerrain() {
       uDayLight: { value: 1 }, uSunUp: { value: 1 }, uShadow: { value: null }, uShadowOn: { value: 0 }, uShadowBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uCover: { value: 0 },
       uDemMask: { value: demMaskTex }, uDemOn: { value: 0 }, uDemK: { value: new THREE.Vector4(G.nx, G.ny, 1, 1) },
       uCoast: { value: coastTex }, uCoastK: { value: new THREE.Vector4(0, 0, 1, 0) },
+      uOrtho: { value: orthoTex }, uOrthoK: { value: new THREE.Vector4(0, 0, 1, 0) },
+      uCam: { value: new THREE.Vector3() }, uFogC: { value: new THREE.Color(0.55, 0.62, 0.70) }, uFogD: { value: new THREE.Vector2(1e5, 2e5) }, uTime: { value: 0 },
       uMode: { value: MODE }, uOpac: { value: OPAC[MODE] ?? 1 }, uIso: { value: 0 }, uIsoStep: { value: 4 }, uMs: { value: new THREE.Vector2(980, 1040) },
     },
   });
@@ -375,6 +412,53 @@ function updateCoast(now) {
 // 20 m below the lowest ground of the outline ----------
 let BLD = null, bldClock = 0, bldLoading = 0, bldMat = null, bldSun = null, bldAmb = null;
 const bldTiles = new Map();
+// ---------- aerial imagery (USDA NAIP, ortho3d.py): M x M pixels on the finest close-up tiles, a W x W window around the
+// view in one texture, as the coast masks; outside the window (or without imagery) the terrain keeps its height colours
+let ORTHO = null, orthoTex = null, orthoData = null, orthoKey = "", orthoClock = 0;
+const ORTHO_W = PHONE ? 2 : 4, orthoImg = new Map();
+async function loadOrthoMeta() {
+  ORTHO = null;
+  if (DEM && DEM.ortho) try { const r = await fetch(DEMDIR + "ortho/index.json"); ORTHO = r.ok ? await r.json() : null; } catch (e) { ORTHO = null; }
+  if (ORTHO) ORTHO.has = new Set(ORTHO.tiles.map((t) => t[0] + "_" + t[1]));
+  const n = ORTHO ? ORTHO_W * ORTHO.M : 1;
+  orthoData = new Uint8Array(n * n * 4);
+  orthoTex = new THREE.DataTexture(orthoData, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
+  orthoTex.magFilter = THREE.LinearFilter; orthoTex.minFilter = THREE.LinearMipmapLinearFilter; orthoTex.generateMipmaps = true;
+  orthoTex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); orthoTex.needsUpdate = true;
+  if (terrainMesh) terrainMesh.material.uniforms.uOrtho.value = orthoTex;
+}
+function orthoFill(c0, r0) {
+  const M = ORTHO.M, n = ORTHO_W * M;
+  orthoData.fill(0);
+  for (let b = 0; b < ORTHO_W; b++) for (let a = 0; a < ORTHO_W; a++) {
+    const px = orthoImg.get((r0 + b) + "_" + (c0 + a));
+    if (!px) continue;
+    for (let rr = 0; rr < M; rr++) orthoData.set(px.subarray(4 * rr * M, 4 * (rr + 1) * M), 4 * ((b * M + rr) * n + a * M));
+  }
+  orthoTex.needsUpdate = true;
+}
+function updateOrtho(now) {
+  if (!ORTHO || !terrainMesh || now - orthoClock < 300) return;
+  orthoClock = now;
+  const u = terrainMesh.material.uniforms, T = ORTHO.T;
+  const on = $("dem").checked && DEM && demLev === DEM.levels.length - 1 && camera.position.distanceTo(controls.target) < 60;
+  if (!on) { u.uOrthoK.value.w = 0; orthoKey = ""; return; }
+  const c0 = Math.round(iOfX(controls.target.x) / T - ORTHO_W / 2), r0 = Math.round(jOfZ(controls.target.z) / T - ORTHO_W / 2);
+  for (let b = 0; b < ORTHO_W; b++) for (let a = 0; a < ORTHO_W; a++) {
+    const k = (r0 + b) + "_" + (c0 + a);
+    if (!ORTHO.has.has(k) || orthoImg.has(k)) continue;
+    orthoImg.set(k, null);
+    loadPixels(`${DEMDIR}ortho/${k}.jpg`).then((im) => { orthoImg.set(k, new Uint8Array(im.rgba)); orthoKey = ""; }).catch(() => {});
+  }
+  const key = c0 + "_" + r0 + "_" + [...orthoImg.values()].filter(Boolean).length;
+  if (key !== orthoKey) { orthoKey = key; orthoFill(c0, r0); }
+  if (orthoImg.size > 3 * ORTHO_W * ORTHO_W) for (const [k, v] of orthoImg) {  // forget far tiles (phone memory)
+    if (orthoImg.size <= 2 * ORTHO_W * ORTHO_W) break;
+    const [tj, ti] = k.split("_").map(Number);
+    if (v && (tj < r0 || tj >= r0 + ORTHO_W || ti < c0 || ti >= c0 + ORTHO_W)) orthoImg.delete(k);
+  }
+  u.uOrtho.value = orthoTex; u.uOrthoK.value.set(c0 * T, r0 * T, ORTHO_W * T, 1);
+}
 async function loadBldMeta() {
   BLD = null;  // dem.json says whether this page has buildings (osm3d.py), so other pages make no request
   if (DEM && DEM.bld) try { const r = await fetch(BLDDIR + "index.json"); BLD = r.ok ? await r.json() : null; } catch (e) { BLD = null; }
@@ -387,8 +471,13 @@ async function loadBldMeta() {
   bldMat.userData.uExag = { value: exag() };
   bldMat.onBeforeCompile = (sh) => {
     sh.uniforms.uExag = bldMat.userData.uExag;
-    sh.vertexShader = "attribute vec2 aBR;\nuniform float uExag;\n" + sh.vertexShader.replace("#include <begin_vertex>",
-      "vec3 transformed = vec3(position.x, aBR.x * uExag + aBR.y, position.z);");
+    sh.vertexShader = "attribute vec2 aBR;\nattribute float aTone;\nuniform float uExag;\nvarying float vTone;\nvarying float vRel;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      "vec3 transformed = vec3(position.x, aBR.x * uExag + aBR.y, position.z); vTone = aTone; vRel = aBR.y;");
+    // a colour per building (warm stone, white, light grey, cool grey) and ambient occlusion over the lowest ~12 m
+    sh.fragmentShader = "varying float vTone;\nvarying float vRel;\n" + sh.fragmentShader.replace("vec4 diffuseColor = vec4( diffuse, opacity );",
+      `vec3 bc = vTone < 0.25 ? vec3(.86,.80,.70) : vTone < 0.5 ? vec3(.93,.92,.89) : vTone < 0.75 ? vec3(.78,.78,.77) : vec3(.68,.72,.76);
+       bc *= 0.88 + 0.24 * fract(vTone * 9.7);
+       vec4 diffuseColor = vec4(bc * (0.62 + 0.38 * smoothstep(-0.02, 0.012, vRel)), opacity);`);
   };
   bldSun = new THREE.DirectionalLight(0xffffff, 2.0);
   bldAmb = new THREE.HemisphereLight(0xe4ecf2, 0x6b6258, 1.15);
@@ -411,7 +500,7 @@ async function loadBldTile(tj, ti) {
       nv += 5 * L; ni += 6 * L + 3 * (L - 2 + 2 * (nr - 1));
       p += 3 + nr + 2 * L;
     }
-    const pos = new Float32Array(3 * nv), nrm = new Int8Array(3 * nv), br = new Float32Array(2 * nv);
+    const pos = new Float32Array(3 * nv), nrm = new Int8Array(3 * nv), br = new Float32Array(2 * nv), tone = new Uint8Array(nv);
     const idx = new Uint32Array(ni);
     let v = 0, q = 0;
     const put = (x, z, base, rel, nx, ny, nz) => { pos[3 * v] = x; pos[3 * v + 2] = z; nrm[3 * v] = Math.round(127 * nx); nrm[3 * v + 1] = Math.round(127 * ny); nrm[3 * v + 2] = Math.round(127 * nz); br[2 * v] = base; br[2 * v + 1] = rel; return v++; };
@@ -435,6 +524,7 @@ async function loadBldTile(tj, ti) {
         const w2 = put(B.x, B.y, base, h, nx, 0, nz), w3 = put(A.x, A.y, base, h, nx, 0, nz);
         idx[q++] = w0; idx[q++] = w1; idx[q++] = w2; idx[q++] = w0; idx[q++] = w2; idx[q++] = w3;
       }
+      tone.fill(((t.n * 2654435761) >>> 24) & 255, v0, v);  // one hashed tone per building
       t.n++;
     }
     const g = new THREE.BufferGeometry();
@@ -443,6 +533,7 @@ async function loadBldTile(tj, ti) {
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3).onUpload(free));
     g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3, true).onUpload(free));
     g.setAttribute("aBR", new THREE.BufferAttribute(br, 2).onUpload(free));
+    g.setAttribute("aTone", new THREE.BufferAttribute(tone, 1, true).onUpload(free));
     g.setIndex(new THREE.BufferAttribute(q < ni ? idx.slice(0, q) : idx, 1).onUpload(free));
     t.nv = nv;
     t.mesh = new THREE.Mesh(g, bldMat);
@@ -1916,7 +2007,15 @@ function frame(now) {
   if (cloudMesh && TIERS[QUAL]) { const u = cloudMesh.material.uniforms; u.uNear.value = Math.max(4, 0.35 * dist); u.uSteps.value = moving ? TIERS[QUAL].move : TIERS[QUAL].steps; }
   camera.near = Math.max(0.2, dist / 2000); camera.far = dist * 20 + 2000; camera.updateProjectionMatrix();
   if (marker) { marker.scale.setScalar(camera.position.distanceTo(marker.position) * 0.018); marker.userData.ring.scale.setScalar(1 + 0.3 * Math.abs(Math.sin(now / 500))); }
-  if (REG) { updateDem(now); updateCoast(now); updateBld(now); updateLandmarks(); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
+  if (terrainMesh) {  // haze: clear around the view, thicker towards the horizon; the sky behind takes the haze colour
+    const u = terrainMesh.material.uniforms, d = u.uDayLight.value;
+    u.uCam.value.copy(camera.position); u.uTime.value = now / 1000;
+    u.uFogD.value.set(dist * 1.2 + 2, dist * 9 + 60);
+    u.uFogC.value.setRGB(0.07 + 0.53 * d, 0.10 + 0.58 * d, 0.13 + 0.62 * d);
+    if (scene.fog) { scene.fog.color.copy(u.uFogC.value); scene.fog.near = u.uFogD.value.x; scene.fog.far = u.uFogD.value.y * 1.6; }
+    if (sky) { sky.position.copy(camera.position); sky.material.uniforms.uHaze.value.copy(u.uFogC.value); sky.material.uniforms.uDay.value = d; }
+  }
+  if (REG) { updateDem(now); updateCoast(now); updateOrtho(now); updateBld(now); updateLandmarks(); stepRibbons(dt); stepDrops(dt); updateLabels(performance.now()); updateCompass(); }
   renderer.render(scene, camera);
   if (cloudMesh && cloudMesh.visible) {
     updateTerrainShadow();
@@ -2017,6 +2116,7 @@ async function main() {
   for (const r of M.terrain.regions) $("view").append(new Option(r.name, r.id));
   await loadDemMeta();
   await loadCoastMeta();
+  await loadOrthoMeta();
   await loadBldMeta();
   await loadLandmarks();
   await loadRegion("all", true);
