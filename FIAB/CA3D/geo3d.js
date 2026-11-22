@@ -514,9 +514,9 @@ function updateBld(now) {
     for (let tj = Math.floor(jOfZ(tz - rad) / T); tj <= Math.floor(jOfZ(tz + rad) / T); tj++)
       for (let ti = Math.floor(iOfX(tx - rad) / T); ti <= Math.floor(iOfX(tx + rad) / T); ti++)
         if (BLD.n.has(tj + "_" + ti)) want.add(tj + "_" + ti);
-    // nearest tiles first, within the vertex budget (~45 vertices a building)
+    // nearest tiles first, within the vertex budget (~45 vertices a building; 8 M on phones ~ 6-8 San Francisco tiles, ~250 MB on the GPU)
     const cx = (k) => { const [tj, ti] = k.split("_").map(Number); return Math.hypot(xOfI((ti + 0.5) * T) - tx, zOfJ((tj + 0.5) * T) - tz); };
-    let est = 0; const budget = PHONE || IPAD ? 4.5e6 : 8e6;
+    let est = 0; const budget = PHONE || IPAD ? 8e6 : 1.2e7;
     for (const k of [...want].sort((x, y) => cx(x) - cx(y))) { est += 45 * BLD.n.get(k); if (est > budget && est > 45 * BLD.n.get(k)) want.delete(k); }
     for (const k of want) if (!bldTiles.has(k) && bldLoading < 4) { const [tj, ti] = k.split("_").map(Number); loadBldTile(tj, ti); }
   }
@@ -528,7 +528,7 @@ function updateBld(now) {
   }
   // keep hidden tiles for a quick return, within a vertex budget (a phone tab has a few hundred MB)
   let total = 0; for (const t of bldTiles.values()) total += t.nv || 0;
-  const budget = PHONE || IPAD ? 4.5e6 : 8e6;
+  const budget = PHONE || IPAD ? 8e6 : 1.2e7;
   if (total > budget) {
     const old = [...bldTiles.entries()].filter(([, t]) => t.mesh && !t.mesh.visible).sort((x, y) => x[1].used - y[1].used);
     for (const [k, t] of old) { if (total <= budget) break; total -= t.nv; scene.remove(t.mesh); t.mesh.geometry.dispose(); bldTiles.delete(k); }
