@@ -1951,9 +1951,23 @@ function composeFrame() {
   g.shadowBlur = 0;
   const grad = g.createLinearGradient(0, H - 60 * u, 0, H); grad.addColorStop(0, "rgba(3,15,25,0)"); grad.addColorStop(1, "rgba(3,15,25,.8)");
   g.fillStyle = grad; g.fillRect(0, H - 60 * u, W, 60 * u);
-  g.font = `${Math.round(12 * u)}px system-ui,sans-serif`; g.textAlign = "left"; g.fillStyle = "#c9d6de";
-  g.fillText(model.kind === "analysis" ? model.name : `${model.name}, start ${FMTUTC(startMs())}`, pad, H - pad);
-  g.textAlign = "right"; g.fillStyle = "#ffffffb0"; g.fillText(`${M.title} · FIAB · ECMWF`, W - pad, H - pad);
+  // model line and credit share the bottom line when they fit (desktop); on a narrow (phone) frame the credit goes
+  // above and the model line wraps at word boundaries
+  g.font = `${Math.round(12 * u)}px system-ui,sans-serif`;
+  const left = model.kind === "analysis" ? model.name : `${model.name}, start ${FMTUTC(startMs())}`;
+  const right = `${M.title} · FIAB · ECMWF`, room = W - 2 * pad, lh = 16 * u;
+  const wrap = txt => {
+    const out = []; let cur = "";
+    for (const w of txt.split(" ")) { const t2 = cur ? cur + " " + w : w; if (cur && g.measureText(t2).width > room) { out.push(cur); cur = w; } else cur = t2; }
+    return cur ? [...out, cur] : out;
+  };
+  const one = g.measureText(left).width + g.measureText(right).width + 24 * u <= room;
+  const lines = one ? [left] : wrap(left), nl = lines.length + (one ? 0 : 1);
+  if (nl > 2) { const gh = (nl + 2) * lh, gr = g.createLinearGradient(0, H - gh, 0, H); gr.addColorStop(0, "rgba(3,15,25,0)"); gr.addColorStop(1, "rgba(3,15,25,.8)"); g.fillStyle = gr; g.fillRect(0, H - gh, W, gh); }
+  g.textAlign = "left"; g.fillStyle = "#c9d6de";
+  lines.forEach((l, i) => g.fillText(l, pad, H - pad - (lines.length - 1 - i) * lh));
+  g.textAlign = "right"; g.fillStyle = "#ffffffb0";
+  g.fillText(right, W - pad, one ? H - pad : H - pad - lines.length * lh);
 }
 function recButtons() {
   const on = !!rec, s = on ? Math.floor((performance.now() - rec.t0) / 1000) : 0, txt = on ? `■ Stop ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "● Record";
