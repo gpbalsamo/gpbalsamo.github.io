@@ -1674,18 +1674,28 @@ function flyZoom(f, e) {
   _s0.set(r, f.s0.phi + (f.s1.phi - f.s0.phi) * e, f.s0.theta + (f.s1.theta - f.s0.theta) * e);
   camera.position.copy(controls.target).add(_o.setFromSpherical(_s0));
 }
-const short = (s) => ({ California: "CA", "San Francisco": "SF" })[s] || (/\s/.test(s) ? s.split(/\s+/).map((w) => w[0]).join("").toUpperCase() : s);
+const short = (s) => ({ California: "CA", "San Francisco": "SF", "Los Angeles": "LA" })[s] || (/\s/.test(s) ? s.split(/\s+/).map((w) => w[0]).join("").toUpperCase() : s);
 let TOUR = null;
 function setupTour() {
   if (!$("tourCity")) return; // a page made before the tour buttons
-  const c = BLD && TOWNS.find((t) => t[0] === BLD.area), all = M.terrain.regions[0];
-  $("tourCity").hidden = $("tourAll").hidden = !c;
-  if (!c) return;
-  TOUR = { name: c[0], lat: c[1], lon: c[2] };
-  $("tourCity").textContent = short(c[0]) + " 🔄"; $("tourCity").title = `Fly into an orbit of ${c[0]}`;
+  const all = M.terrain.regions[0];
+  // one orbit button per city with buildings (osm3d.py areas; older indexes name a single area)
+  const cities = BLD ? (BLD.areas || [{ name: BLD.area }]).map((a) => TOWNS.find((t) => t[0] === a.name)).filter(Boolean) : [];
+  document.querySelectorAll(".tourMore").forEach((e) => e.remove());
+  $("tourCity").hidden = $("tourAll").hidden = !cities.length;
+  $("time").classList.toggle("tour2", cities.length > 1);
+  if (!cities.length) return;
+  TOUR = { name: cities[0][0], lat: cities[0][1], lon: cities[0][2] };
+  const label = (b, c) => { b.textContent = short(c[0]) + " 🔄"; b.title = `Fly into an orbit of ${c[0]}`; b.onclick = () => tourCity({ name: c[0], lat: c[1], lon: c[2] }); };
+  label($("tourCity"), cities[0]);
+  let prev = $("tourCity");
+  for (const c of cities.slice(1)) {
+    const b = document.createElement("button"); b.className = "tourMore"; label(b, c); prev.after(b); prev = b;
+  }
   $("tourAll").textContent = short(all.name) + " 🗺️"; $("tourAll").title = `Fly out to the whole of ${all.name}`;
 }
-async function tourCity() {
+async function tourCity(city) {
+  if (city && city.name) TOUR = city;
   let [x, z] = sceneOf(TOUR.lat, TOUR.lon);
   if (!Number.isFinite(terrainAt(x, z))) { $("view").value = M.terrain.regions[0].id; await loadRegion(M.terrain.regions[0].id, true); [x, z] = sceneOf(TOUR.lat, TOUR.lon); }
   $("orbH").value = 1.5; $("orbD").value = 10; $("orbT").value = 90; orbitReadouts();
@@ -2168,7 +2178,7 @@ async function main() {
   $("prev").onclick = () => setHour(hour - 1);
   $("next").onclick = () => setHour(hour + 1);
   $("peak").onclick = () => setHour(run.peak || 0);
-  if ($("tourCity")) { $("tourCity").onclick = tourCity; $("tourAll").onclick = tourAll; }
+  if ($("tourCity")) { if (!$("tourCity").onclick) $("tourCity").onclick = () => tourCity(); $("tourAll").onclick = tourAll; }
   $("play").onclick = () => togglePlay();
   $("exag").oninput = setHeights;
   $("view").onchange = () => loadRegion($("view").value, false);
