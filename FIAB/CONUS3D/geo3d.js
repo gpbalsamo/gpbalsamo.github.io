@@ -360,11 +360,17 @@ async function loadDemTile(lev, tj, ti) {
 // ---------- sharp coastline (OpenStreetMap land polygons, coast3d.py): masks of ~40 m pixels on the finest close-up
 // tiles, gathered around the look-at point into one texture (R land 0..255, anti-aliased; G 255 where known) that the
 // terrain shader reads per pixel; elsewhere the land of the DEM at the vertices ----------
-let COAST = null, coastTex = null, coastData = null, coastKey = "", coastClock = 0;
-const COAST_W = 6, coastPng = new Map();
+// Inland water (lakes3d.py: OSM lakes, reservoirs, river areas, same tiles) is taken out of the land when "Lakes" is on.
+let COAST = null, coastTex = null, coastData = null, coastKey = "", coastClock = 0, LAKE = null;
+const COAST_W = 6, coastPng = new Map(), lakePng = new Map();
+const lakesOn = () => !!LAKE && (!$("lakes") || $("lakes").checked);
 async function loadCoastMeta() {
   COAST = null;  // dem.json says whether this page has coast masks (coast3d.py)
   if (DEM && DEM.coast) try { const r = await fetch(DEMDIR + "coast/index.json"); COAST = r.ok ? await r.json() : null; } catch (e) { COAST = null; }
+  LAKE = null;
+  if (COAST && DEM.lakes) try { const r = await fetch(DEMDIR + "lakes/index.json"); LAKE = r.ok ? await r.json() : null; } catch (e) { LAKE = null; }
+  if (LAKE && (LAKE.T !== COAST.T || LAKE.M !== COAST.M)) LAKE = null;
+  if ($("lakeRow")) $("lakeRow").hidden = !LAKE;
   const n = COAST ? COAST_W * COAST.M : 1;
   coastData = new Uint8Array(n * n * 2);
   coastTex = new THREE.DataTexture(coastData, n, n, THREE.RGFormat, THREE.UnsignedByteType);
@@ -380,9 +386,14 @@ function coastFill(c0, r0) {  // the W x W tiles from tile column c0, row r0
     const st = COAST.status[tj * COAST.nti + ti];
     let px = null;
     if (st === "2") { px = coastPng.get(tj + "_" + ti); if (!px) continue; } else if (st !== "0" && st !== "1") continue;
+    const ls = lakesOn() ? LAKE.status[tj * LAKE.nti + ti] : "0", lp = ls === "2" ? lakePng.get(tj + "_" + ti) : null;
+    const lw = ls === "1" ? 255 : 0;  // water everywhere in the tile, or none (or its mask not loaded yet)
     for (let r = 0; r < M; r++) {
       let o = 2 * ((b * M + r) * n + a * M);
-      for (let c = 0; c < M; c++, o += 2) { coastData[o] = px ? px[4 * (r * M + c)] : st === "1" ? 255 : 0; coastData[o + 1] = 255; }
+      for (let c = 0; c < M; c++, o += 2) {
+        const land = px ? px[4 * (r * M + c)] : st === "1" ? 255 : 0, w = lp ? lp[4 * (r * M + c)] : lw;
+        coastData[o] = Math.min(land, 255 - w); coastData[o + 1] = 255;
+      }
     }
   }
   coastTex.needsUpdate = true;
@@ -402,7 +413,16 @@ function updateCoast(now) {
     loadPixels(`${DEMDIR}coast/${k}.png`).then((im) => { coastPng.set(k, new Uint8Array(im.rgba)); coastKey = ""; })
       .catch(() => coastPng.set(k, new Uint8Array(4 * COAST.M * COAST.M)));
   }
-  const key = c0 + "_" + r0 + "_" + [...coastPng.values()].filter(Boolean).length;
+  const lk = lakesOn();
+  if (lk) for (let b = 0; b < COAST_W; b++) for (let a = 0; a < COAST_W; a++) {
+    const tj = r0 + b, ti = c0 + a, k = tj + "_" + ti;
+    if (tj < 0 || ti < 0 || tj >= LAKE.ntj || ti >= LAKE.nti || LAKE.status[tj * LAKE.nti + ti] !== "2" || lakePng.has(k)) continue;
+    lakePng.set(k, null);
+    loadPixels(`${DEMDIR}lakes/${k}.png`).then((im) => { lakePng.set(k, new Uint8Array(im.rgba)); coastKey = ""; })
+      .catch(() => lakePng.set(k, new Uint8Array(4 * LAKE.M * LAKE.M)));
+  }
+  if (lakePng.size > 200) for (const [k, v] of lakePng) { if (lakePng.size <= 120) break; const [tj, ti] = k.split("_").map(Number); if (v && (tj < r0 || tj >= r0 + COAST_W || ti < c0 || ti >= c0 + COAST_W)) lakePng.delete(k); }
+  const key = c0 + "_" + r0 + "_" + [...coastPng.values()].filter(Boolean).length + "_" + (lk ? 1 + [...lakePng.values()].filter(Boolean).length : 0);
   if (key !== coastKey) { coastKey = key; coastFill(c0, r0); }
   if (coastPng.size > 200) for (const [k, v] of coastPng) { if (coastPng.size <= 120) break; const [tj, ti] = k.split("_").map(Number); if (v && (tj < r0 || tj >= r0 + COAST_W || ti < c0 || ti >= c0 + COAST_W)) coastPng.delete(k); }
   u.uCoast.value = coastTex; u.uCoastK.value.set(c0 * T, r0 * T, COAST_W * T, 1);
@@ -2145,6 +2165,7 @@ async function main() {
   await loadLandmarks();
   await loadRegion("all", true);
   $("dem").onchange = () => { demKey = ""; demClock = 0; };
+  if ($("lakes")) $("lakes").onchange = () => { coastKey = ""; coastClock = 0; };
   for (const m of M.models) $("model").append(new Option(m.name, m.id));
   const fillRuns = () => {
     const md = M.models.find((m) => m.id === $("model").value), cur = $("run").value || M.defaultRun;
