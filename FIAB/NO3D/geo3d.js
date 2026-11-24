@@ -23,7 +23,7 @@ const PRHI = 60, ZSHI = 6000; // display texture: hourly precipitation (sqrt) an
 const PHONE = matchMedia("(max-width: 700px)").matches || (matchMedia("(pointer: coarse)").matches && innerHeight < 500);
 let MODE = 0, RLEV = [], RW = 0, RH = 0; // landscape colour mode; humidity levels (hPa, ascending height), their grid
 const OPAC = { 0: 0.85, 1: 0.9, 2: 0.7 };
-const isRh = (f) => /^[rh]\d+$/.test(f); // humidity and height of a pressure level, on every RSUB-th cell
+const isRh = (f) => /^[rhwc]\d+$/.test(f); // humidity, height, condensate or cloud fraction of a pressure level, on every RSUB-th cell
 
 // ---------- geometry: cell index (fj rows from the north, fi columns from the west) <-> scene km ----------
 const xOfI = (fi) => (fi - CX) * G.kx, zOfJ = (fj) => (fj - CZ) * G.kz;
@@ -115,7 +115,7 @@ varying float vDem; uniform sampler2D uDemMask; uniform float uDemOn; uniform ve
 uniform float uDayLight; uniform float uSunUp; uniform sampler2D uShadow; uniform float uShadowOn; uniform vec4 uShadowBox; uniform float uCover;
 uniform sampler2D uWx; uniform sampler2D uWx2; uniform vec3 uLight; uniform float uHaveWx;
 varying vec3 vW; varying float vDepth; uniform vec3 uCam; uniform vec3 uFogC; uniform vec2 uFogD; uniform float uTime;
-uniform sampler2D uOrtho; uniform vec4 uOrthoK;
+uniform sampler2D uOrtho; uniform vec4 uOrthoK; uniform sampler2D uLsTex; uniform float uLsOn;
 uniform float uMode; uniform float uOpac; uniform float uIso; uniform float uIsoStep; uniform vec2 uMs;
 uniform vec3 uTemp[${C.TEMP.length}]; uniform float uTempV[${C.TEMP.length}];
 uniform vec3 uWind[${C.WSPD.length}]; uniform float uWindV[${C.WSPD.length}];
@@ -166,7 +166,7 @@ void main(){
   }
   vec3 n = normalize(vN);
   float diff = max(dot(n, uLight), 0.0);
-  vec3 c = lnd < 0.5 ? vec3(.10,.23,.32) : hyps(vH);
+  vec3 c = lnd < 0.5 ? vec3(.10,.23,.32) : hyps(uLsOn > 0.5 ? min(vH, 2300.0) : vH);  // with lying snow: no fixed white caps
   float shade = lnd < 0.5 ? 0.75 + 0.25 * diff : 0.32 + 0.78 * diff;
   vec3 V = normalize(uCam - vW);
   if(lnd > 0.5 && uOrthoK.w > 0.5){ // aerial imagery (ortho3d.py, NAIP) near the view; black = no image; faded at the window edge
@@ -176,6 +176,17 @@ void main(){
       float e = smoothstep(0.0, 0.12, min(min(oc.x, oc.y), min(1.0 - oc.x, 1.0 - oc.y))) * step(0.012, max(o.r, max(o.g, o.b)));
       c = mix(c, o * 1.06, e); shade = mix(shade, 0.70 + 0.40 * diff, e);  // the photo has its own shadows: softer shading
     }
+  }
+  if(lnd > 0.5 && uLsOn > 0.5 && (uMode < 0.5 || uMode > 2.5)){ // lying snow (cloudsnow3d.py): the model snow, or a snowline on the fine terrain
+    vec4 s = texture2D(uLsTex, vUv);
+    float wm = s.r, v = s.b, white = wm;
+    if(v > 0.02){
+      float sl = s.g / v * 6000.0, loc = clamp(s.a / v, 0.0, 1.0);
+      float wl = smoothstep(sl - 150.0, sl + 150.0, vH);
+      white = mix(wm, mix(max(wm, 0.9 * wl), wl, loc), smoothstep(0.3, 0.7, v));  // local: the snowline decides; borrowed: only adds
+    }
+    float slope = 1.0 - smoothstep(0.55, 0.8, 1.0 - n.y);  // steep rock holds less snow
+    c = mix(c, vec3(.94,.96,.99), clamp(white * (0.35 + 0.65 * slope), 0.0, 1.0) * 0.92);
   }
   float glint = 0.0;
   if(lnd < 0.5){ // water: small moving ripples, sun glint, brighter towards the horizon (Fresnel)
@@ -218,8 +229,14 @@ void main(){
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-let wx2Tex = null, wx2Data = null;
+let wx2Tex = null, wx2Data = null, lsTex = null, lsData = null;
 function makeWxTexture() {
+  // lying snow: R model snow whitening (20 mm w.e. = full), G snowline (0..6000 m) times B its weight (1 where there is
+  // one, so that linear filtering blends only real snowlines), A local (1) or borrowed (0) times B
+  lsData = new Uint8Array(G.nx * G.ny * 4);
+  lsTex = new THREE.DataTexture(lsData, G.nx, G.ny, THREE.RGBAFormat, THREE.UnsignedByteType);
+  lsTex.magFilter = lsTex.minFilter = THREE.LinearFilter;
+  lsTex.needsUpdate = true;
   wxData = new Uint8Array(G.nx * G.ny * 4);
   wxTex = new THREE.DataTexture(wxData, G.nx, G.ny, THREE.RGBAFormat, THREE.UnsignedByteType);
   wxTex.magFilter = wxTex.minFilter = THREE.LinearFilter;
@@ -259,7 +276,7 @@ function makeTerrain() {
       uDayLight: { value: 1 }, uSunUp: { value: 1 }, uShadow: { value: null }, uShadowOn: { value: 0 }, uShadowBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uCover: { value: 0 },
       uDemMask: { value: demMaskTex }, uDemOn: { value: 0 }, uDemK: { value: new THREE.Vector4(G.nx, G.ny, 1, 1) },
       uCoast: { value: coastTex }, uCoastK: { value: new THREE.Vector4(0, 0, 1, 0) },
-      uOrtho: { value: orthoTex }, uOrthoK: { value: new THREE.Vector4(0, 0, 1, 0) },
+      uOrtho: { value: orthoTex }, uOrthoK: { value: new THREE.Vector4(0, 0, 1, 0) }, uLsTex: { value: lsTex }, uLsOn: { value: 0 },
       uCam: { value: new THREE.Vector3() }, uFogC: { value: new THREE.Color(0.55, 0.62, 0.70) }, uFogD: { value: new THREE.Vector2(1e5, 2e5) }, uTime: { value: 0 },
       uMode: { value: MODE }, uOpac: { value: OPAC[MODE] ?? 1 }, uIso: { value: 0 }, uIsoStep: { value: 4 }, uMs: { value: new THREE.Vector2(980, 1040) },
     },
@@ -923,7 +940,8 @@ function stepDrops(dt) {
 const NZB = 64;
 let cloudMesh = null, cloudScene = null, cloudRT = null, cloudQuad = null, volCache = new Map(), terTex = null, noiseTex = null;
 let shadowRT = null, shadowScene = null, shadowCam = null, shadowKey = "";
-let CSRC = "r"; // cloud source: r humidity, w condensate
+let CSRC = "r"; // cloud source: r humidity, w condensate, c cloud fraction held to the model cloud cover
+const csrc = () => (CSRC !== "r" && !RLEV.some((p) => has(CSRC + p)) ? "r" : CSRC); // the run's own: humidity if it lacks the chosen one
 const SUN = { el: 45, az: 180, dir: new THREE.Vector3(0, 1, 0) };
 // quality tiers: cloud render scale, ray steps still / moving, self-shadow samples, edge detail, terrain shadow texture
 const TIERS = {
@@ -961,10 +979,20 @@ float coverage(vec3 p){
   float fi = p.x / uCell.x + uCell.z, fj = p.z / uCell.y + uCell.w;
   vec3 uvw = vec3((fi / uVol.z + 0.5) / uVol.x, (fj / uVol.z + 0.5) / uVol.y, zkm / uTop);
   float v = mix(texture(uVolA, uvw).r, texture(uVolB, uvw).r, uMix), c;
-  if(uSrc > 0.5){ float w = v * v * 0.6; c = smoothstep(0.004, 0.08, w); }
+  if(uSrc > 1.5){ // cloud fraction: broken cloud of that fraction, the gaps from a slow noise in physical km
+    float n = smoothstep(0.22, 0.78, texture(uNoise, vec3(p.x, zkm * 2.5, p.z) / 23.0).r);
+    c = smoothstep(0.02, 0.08, v) * smoothstep(1.0 - v - 0.1, 1.0 - v + 0.1, n);
+  }
+  else if(uSrc > 0.5){ float w = v * v * 0.6; c = smoothstep(0.004, 0.08, w); }
   else { float thr = min(0.99, (0.60 + 0.30 * clamp((presAt(zkm) - 300.0) / 700.0, 0.0, 1.0)) * uThr); c = smoothstep(thr, thr + 0.08, v); }
   float edge = smoothstep(uBand.x - 0.4, uBand.x + 0.1, zkm) * (1.0 - smoothstep(min(uBand.y, top) - 0.3, min(uBand.y + 0.4, top), zkm));
   return c * edge;
+}
+// liquid share of the cloud at p (G channel of the volume): 1 liquid, 0 ice
+float liquid(vec3 p){
+  float fi = p.x / uCell.x + uCell.z, fj = p.z / uCell.y + uCell.w;
+  vec3 uvw = vec3((fi / uVol.z + 0.5) / uVol.x, (fj / uVol.z + 0.5) / uVol.y, p.y / uExag / uTop);
+  return mix(texture(uVolA, uvw).g, texture(uVolB, uvw).g, uMix);
 }
 // edge detail: erode the coverage near its edges with noise in physical km (x, z scene km; y the true height)
 float detailed(vec3 p, float c, float lod){
@@ -1018,7 +1046,9 @@ void main(){
     float sunl = uDay * beer * mix(1.0, powder * 1.6, 0.35) * phase;
     float h = clamp((p.y / uExag) / max(uTop, 1.0), 0.0, 1.0);
     vec3 lc = uSunCol * sunl + uAmb * (0.55 + 0.45 * h);
-    float al = 1.0 - exp(-a * uDens * dt);
+    // optical thickness: ice cloud thinner than liquid cloud for the same cover (extinction ratio ~1:5, as liquid
+    // water vs ice water per kg); the humidity and condensate sources keep the full value (G = 1)
+    float al = 1.0 - exp(-a * uDens * dt * mix(0.22, 1.0, liquid(p)));
     col += T * al * lc;
     T *= 1.0 - al;
     if(T < 0.02) break;
@@ -1128,13 +1158,17 @@ function updateCloudBox() {
 }
 const cloudTop = () => M.zstd[RLEV[RLEV.length - 1]] / 1000 + 1.0; // km
 function volume(k) {
-  const id = R.mid + "/" + R.key + "/" + k + "/" + CSRC;
+  const SRC = csrc();
+  const id = R.mid + "/" + R.key + "/" + k + "/" + SRC;
   if (volCache.has(id)) return volCache.get(id);
-  const n = RW * RH, nl = RLEV.length, d = new Uint8Array(n * NZB), top = cloudTop() * 1000;
-  const vf = RLEV.map((p) => R.fields[CSRC + p]), hf = RLEV.map((p) => R.fields["h" + p]);
-  const vd = RLEV.map((p) => DEC[CSRC + p]), hd = RLEV.map((p) => DEC["h" + p]), hs = RLEV.map((p) => M.zstd[p]);
+  const n = RW * RH, nl = RLEV.length, d = new Uint8Array(n * NZB * 2), top = cloudTop() * 1000;
+  const vf = RLEV.map((p) => R.fields[SRC + p]), hf = RLEV.map((p) => R.fields["h" + p]);
+  const vd = RLEV.map((p) => DEC[SRC + p]), hd = RLEV.map((p) => DEC["h" + p]), hs = RLEV.map((p) => M.zstd[p]);
   // humidity: 0..1; condensate: sqrt(w / 0.6 g/kg), the same as its storage
-  const norm = CSRC === "w" ? (x) => Math.sqrt(Math.max(0, x) / 0.6) : (x) => x / 100;
+  const norm = SRC === "w" ? (x) => Math.sqrt(Math.max(0, x) / 0.6) : (x) => x / 100;
+  // liquid share (c mode): from the temperature, ~6.5 K/km above the 0 C wet-bulb height of the cell (field zs):
+  // all liquid warmer than -5 C, all ice colder than -40 C
+  const phase = SRC === "c" && R.fields.zs, rs = M.rsub || 2, zsF = R.fields.zs, Dz = DEC.zs;
   const hz = new Float32Array(nl), rv = new Float32Array(nl);
   for (let c = 0; c < n; c++) {
     for (let l = 0; l < nl; l++) {
@@ -1142,6 +1176,7 @@ function volume(k) {
       hz[l] = hf[l] ? hd[l][hf[l][k * n + c]] : hs[l];
     }
     let l = 0;
+    const zs0 = phase ? Dz[zsF[k * N + Math.min(G.ny - 1, Math.floor(c / RW) * rs) * G.nx + Math.min(G.nx - 1, (c % RW) * rs)]] : 0;
     for (let b = 0; b < NZB; b++) {
       const z = (b + 0.5) / NZB * top;
       while (l < nl - 2 && z > hz[l + 1]) l++;
@@ -1149,11 +1184,13 @@ function volume(k) {
       if (z <= hz[0]) v = rv[0];
       else if (z >= hz[nl - 1]) v = rv[nl - 1] * Math.max(0, 1 - (z - hz[nl - 1]) / 600); // fades out above the top level
       else { const f = (z - hz[l]) / Math.max(1, hz[l + 1] - hz[l]); v = rv[l] + f * (rv[l + 1] - rv[l]); }
-      d[b * n + c] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+      d[2 * (b * n + c)] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+      if (phase) { const T = -6.5 * (z - zs0) / 1000, x = Math.min(1, Math.max(0, (T + 40) / 35)); d[2 * (b * n + c) + 1] = Math.round(x * x * (3 - 2 * x) * 255); }
+      else d[2 * (b * n + c) + 1] = 255;
     }
   }
   const t = new THREE.Data3DTexture(d, RW, RH, NZB);
-  t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType;
+  t.format = THREE.RGFormat; t.type = THREE.UnsignedByteType;
   t.minFilter = t.magFilter = THREE.LinearFilter; t.unpackAlignment = 1; t.needsUpdate = true;
   volCache.set(id, t);
   // GPU memory: only the frames in use stay resident (the two around the hour and the next one)
@@ -1195,7 +1232,8 @@ function updateSun(ms) {
 }
 
 function updateClouds(h) {
-  const vol = QUAL !== "off" && $("clouds").checked && RLEV.some((p) => has(CSRC + p));
+  const SRC = csrc();
+  const vol = QUAL !== "off" && $("clouds").checked && RLEV.some((p) => has(SRC + p));
   if (terrainMesh) terrainMesh.material.uniforms.uCover.value = (QUAL === "off" && $("clouds").checked && has("cc")) ? 1 : 0;
   $("cloudOpts").hidden = !$("clouds").checked;
   $("volOpts").hidden = !vol;
@@ -1209,7 +1247,7 @@ function updateClouds(h) {
   eachCloudMat((u) => {
     u.uVolA.value = va; u.uVolB.value = vb; u.uMix.value = h / S - k;
     u.uThr.value = Number($("cthr").value) / 75; u.uBand.value.set(...BANDS[$("clev").value]);
-    u.uSrc.value = CSRC === "w" ? 1 : 0; u.uDetail.value = det; u.uDens.value = Number($("cden").value);
+    u.uSrc.value = SRC === "c" ? 2 : SRC === "w" ? 1 : 0; u.uDetail.value = det; u.uDens.value = Number($("cden").value);
   });
   cloudMesh.material.uniforms.uShadowN.value = $("cself").checked ? t.shadow : 0;
   cloudMesh.material.uniforms.uFine.value = $("orig").checked ? 0 : Number($("cfine").value);
@@ -1295,7 +1333,7 @@ async function loadRun(md, rn, progress) {
   const p = (async () => {
     const out = { mid: md.id, key: rn.key, nt: rn.nt, S: rn.step, fields: {} };
     const jobs = [];
-    for (const f of md.fields) {
+    for (const f of rn.fields || md.fields) { // a run may have fewer fields than its model (older runs)
       out.fields[f] = new Uint8Array(rn.nt * (isRh(f) ? RW * RH : N));
       for (let k = 0; k < rn.nt; k++) jobs.push([f, k]);
     }
@@ -1331,6 +1369,27 @@ function at(f, c, h) {
   if (f === "sn") { if (h <= 0) return 0; const k = Math.min(Math.ceil(h / R.S), R.nt - 1); return C.hourlyPr((q) => fv("pr", q, c), R.nt, R.S, h) * fv("ss", k, c); }
   if (f === "t" || f === "td" || f === "zs") return C.pchipAt(a, R.nt, R.S, h);
   return C.linAt(a, R.nt, R.S, h);
+}
+
+// lying snow of the hour (fields sw, sl of build3d.py snow_fields): the frame pair blended; a snowline only where both
+// frames have one of the same kind, else the nearer frame's
+function fillSnow(k, w) {
+  const on = has("sw") && has("sl") && (!$("lsnow") || $("lsnow").checked);
+  terrainMesh.material.uniforms.uLsOn.value = on ? 1 : 0;
+  if ($("lsnowRow")) $("lsnowRow").hidden = !(has("sw") && has("sl"));
+  if (!on) return;
+  const sw = R.fields.sw, sl = R.fields.sl, Ds = DEC.sw, Dl = DEC.sl, o0 = k * N, o1 = (k + 1) * N;
+  for (let c = 0; c < N; c++) {
+    const s = (1 - w) * Ds[sw[o0 + c]] + w * Ds[sw[o1 + c]];
+    lsData[4 * c] = Math.round(Math.min(1, s / 20) * 255);
+    const a = Dl[sl[o0 + c]], b = Dl[sl[o1 + c]], va = a > -5900, vb = b > -5900;
+    let z = NaN;
+    if (va && vb && (a > 0) === (b > 0)) z = (1 - w) * a + w * b; else if (w < 0.5 ? va : vb) z = w < 0.5 ? a : b;
+    if (Number.isFinite(z)) {
+      lsData[4 * c + 1] = Math.round(Math.min(6000, Math.abs(z)) / 6000 * 255); lsData[4 * c + 2] = 255; lsData[4 * c + 3] = z > 0 ? 255 : 0;
+    } else lsData[4 * c + 1] = lsData[4 * c + 2] = lsData[4 * c + 3] = 0;
+  }
+  lsTex.needsUpdate = true;
 }
 
 // whole-grid fields of the current hour: precipitation (hour ending at h), snow level, wind
@@ -1374,6 +1433,7 @@ function showHour() {
     terrainMesh.material.uniforms.uMs.value.set(lo, hi);
   }
   wx2Tex.needsUpdate = true;
+  fillSnow(k, w);
   updateSun(run.t0 * 1000 + h * 3600000);
   updateClouds(h);
   wxTex.needsUpdate = true;
@@ -1483,6 +1543,7 @@ function updateInfo() {
     + `Wind <b>${C.compass16(dir)} ${Math.round(kmh)} km/h</b>${Number.isFinite(cc) ? ` · cloud <b>${Math.round(cc)} %</b>` : ""}<br>`
     + `Precipitation <b>${f1(pr)} mm</b> in the hour${sn >= 0.05 ? ` (snow ${f1(sn)} mm w.e.)` : ""}<br>`
     + `Snow level ≈ <b>${Math.round(zs / 50) * 50} m</b>${has("ms") ? ` · pressure <b>${Math.round(at("ms", c, h))} hPa</b>` : ""}<br>`
+    + (has("sw") ? `Snow on the ground (IFS) <b>${f1(at("sw", c, h))} mm</b> w.e.<br>` : "")
     + `<div class="row" style="margin-top:6px"><button id="openMg">Point ${model.kind === "analysis" ? "time series" : "forecast"}</button><button id="orbitHere">Orbit here</button></div>`;
   $("openMg").onclick = () => { $("mg").hidden = false; drawMeteogram(); };
   $("orbitHere").onclick = () => startOrbit(selected.x, selected.z, C.nearTown(TOWNS, lat, lon));
@@ -2216,6 +2277,8 @@ async function main() {
   $("night").onchange = () => { shadowKey = ""; showHour(); };
   $("csrc").onchange = () => { CSRC = $("csrc").value; dropVolumes(); updateClouds(hour); };
   if (RLEV.some((p) => [...allF].includes("w" + p))) $("csrcRow").hidden = false;
+  if (RLEV.some((p) => [...allF].includes("c" + p))) { $("csrcRow").hidden = false; CSRC = "c"; $("csrc").value = "c"; }
+  if ($("lsnow")) $("lsnow").onchange = () => showHour();
   if (!TIERS.low || PHONE) $("tshadow").checked = false;
   setQuality(QUAL === "off" ? "off" : "auto");
   if (new URLSearchParams(location.hash.slice(1)).get("perf") === "1" || /[?&]perf/.test(location.search)) $("perf").hidden = false;

@@ -121,6 +121,8 @@ body.sheet #ctrl{display:block}
     <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Loads finer relief as you zoom in; with it, 1–2× height looks natural. Copernicus DEM GLO-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA. Aerial photos (San Francisco Bay Area, Los Angeles basin): USDA National Agriculture Imagery Program (NAIP), public domain.</div></div>
   <div id="lakeRow" hidden><div class="chk"><input type="checkbox" id="lakes" checked><label for="lakes">Lakes and rivers</label></div>
     <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Sharp lake, reservoir and river shores on the close-up terrain (OpenStreetMap water areas). © OpenStreetMap contributors.</div></div>
+  <div id="lsnowRow" hidden><div class="chk"><input type="checkbox" id="lsnow" checked><label for="lsnow">Lying snow</label></div>
+    <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">IFS HRES snow on the ground, brought onto the fine terrain with a snowline inferred from the model's snowy and bare ground nearby (a display choice, not a snow forecast). Idea after Neil Gordon's Weather Explorer.</div></div>
   <div id="bldRow" hidden><div class="chk"><input type="checkbox" id="bld" checked><label for="bld">3D buildings <b id="bldV" style="font-weight:400;color:var(--ink3)"></b></label></div>
     <div style="font-size:10.5px;color:var(--ink3);margin-top:2px">Appear within ~20 km of the view, at true height on the close-up terrain (pilot area). Heights from OpenStreetMap tags, else typical for the building type. © OpenStreetMap contributors.</div></div>
   <label class="l" for="spd">Wind trail speed</label><input id="spd" type="range" min="0.2" max="3" step="0.1" value="1">
@@ -138,7 +140,7 @@ body.sheet #ctrl{display:block}
     <div id="cloudOpts">
       <label class="l" for="quality">Cloud quality</label><select id="quality"><option value="auto">Auto (adapts to this device)</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low (phones)</option><option value="off">Off: flat cloud cover</option></select>
       <div id="volOpts">
-      <div id="csrcRow" hidden><label class="l" for="csrc">Cloud from</label><select id="csrc"><option value="r">Humidity (relative humidity threshold)</option><option value="w">Model condensate (liquid + ice water)</option></select></div>
+      <div id="csrcRow" hidden><label class="l" for="csrc">Cloud from</label><select id="csrc"><option value="r">Humidity (relative humidity threshold)</option><option value="w">Model condensate (liquid + ice water)</option><option value="c">Model cloud cover (low, middle, high), placed by humidity</option></select></div>
       <label class="l" for="clev">Cloud levels</label><select id="clev"><option value="all">All levels</option><option value="low">Low (below ~3 km)</option><option value="mid">Middle (3–7 km)</option><option value="high">High (above ~7 km)</option></select>
       <label class="l" for="cthr">Humidity threshold <b id="cthrV">75 %</b></label><input id="cthr" type="range" min="50" max="100" step="1" value="75">
       <label class="l" for="cden">Cloud density</label><input id="cden" type="range" min="0.01" max="0.4" step="0.01" value="0.06">
@@ -210,7 +212,7 @@ body.sheet #ctrl{display:block}
   <select id="fSpeed" title="Playback speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select>
   <button id="fNow">Now</button><button id="fRec" title="Record">●</button><button id="fHide">☰ Controls</button></div>
 
-<script type="module" src="geo3d.js?v=202611230141"></script>
+<script type="module" src="geo3d.js?v=202611242018"></script>
 <script src="../brand.js" data-pos="tc" defer></script>
 </body>
 </html>
