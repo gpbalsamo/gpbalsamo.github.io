@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing with Anemoi</title>
+<meta name="description" content="Regional AI weather and land experiments with Anemoi models: Italy, Norway, California and China.">
+<style>
+  :root { --bg: #0b1216; --panel: #121c22; --line: #23323b; --ink: #e6edf1; --muted: #93a4ae; --accent: #6cd3ea; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 16px 56px; }
+  h1 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 18px; max-width: 760px; margin: 0 0 20px; }
+  a { color: var(--accent); }
+  .about { max-width: 760px; margin: 0 0 12px; }
+  .about p { margin: 0 0 12px; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 36px; }
+  .btn { display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); text-decoration: none; font-size: 15px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn b { color: var(--accent); font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; color: var(--ink); text-decoration: none; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card img { width: 100%; aspect-ratio: 16 / 7; object-fit: cover; display: block; border-bottom: 1px solid var(--line); background: #070c0f; }
+  .card .body { padding: 14px 16px 16px; }
+  .card h3 { margin: 0 0 2px; font-size: 19px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h3 span { font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 0.08em; }
+  .card .when { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  .card p { margin: 0; font-size: 15px; }
+  .tips { color: var(--muted); font-size: 14px; margin: 32px 0 0; max-width: 760px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Playing with Anemoi</h1>
+  <p class="lede">Regional AI weather and land experiments with Anemoi models, shown as interactive forecast viewers.</p>
+
+  <div class="about">
+    <p><b>Anemoi</b> is the open-source framework developed by ECMWF and European national meteorological services for building data-driven weather models: datasets, graphs, training and inference. ECMWF's global AIFS and limited-area models such as MET Norway's BRIS are built with it.</p>
+    <p>These pages use Anemoi models as a test bench. Global and limited-area models were run, fine-tuned for new domains, and coupled to the ecLand land surface and CaMa-Flood rivers. Each viewer below compares them with IFS analyses and HRES (or with the reference data used) over one week.</p>
+  </div>
+  <div class="links">
+    <a class="btn" href="https://github.com/ecmwf/anemoi-core"><b>ecmwf/anemoi-core</b> on GitHub</a>
+  </div>
+
+  <h2>Forecast viewers</h2>
+  <div class="grid">
+    <a class="card" href="https://weatherexplorer.neilgordon.me/explore/" target="_blank" rel="noopener">
+      <img src="img/NZ3D.webp" alt="New Zealand in 3D: the Southern Alps in relief with forecast rain" loading="lazy">
+      <div class="body">
+        <h3>New Zealand in 3D <span>NZ ↗</span></h3>
+        <p>BRIS over New Zealand at 2.5 km in three dimensions: Neil Gordon&#39;s Weather Explorer (external site), with clouds held to the model&#39;s cloud cover and lying snow on the fine terrain.</p>
+      </div>
+    </a>
+    <a class="card" href="IT/">
+      <img src="img/IT.webp" alt="Italy viewer: CERRA, HRES and the Italy 3 and 6 arcmin models over the Alps" loading="lazy">
+      <div class="body">
+        <h3>Italy <span>IT</span></h3>
+        <p class="when">Week of 25 June – 1 July 2026</p>
+        <p>The Italy 3′ and 6′ limited-area models, trained on CERRA and IFS analyses and rolled out over 2017–25, against CERRA, IFS analysis and HRES, through the Alpine storms of 29 June, with river flow and flooded area from CaMa-Flood at 3′ and 6′. Also in 3D: see Italy in 3D.</p>
+      </div>
+    </a>
+    <a class="card" href="IT3D/">
+      <img src="img/IT3D.webp" alt="Italy in 3D: the Alps and the Po valley in relief with the forecast rain of 29 June" loading="lazy">
+      <div class="body">
+        <h3>Italy in 3D <span>IT3D</span></h3>
+        <p class="when">Week of 25 June – 1 July 2026</p>
+        <p>The same Italy 3′ model (and IFS HRES) on the Alps in three dimensions: rain and snow, temperature or wind on the relief, isobars, wind trails, fly to a town and orbit it, a point meteogram and text forecast.</p>
+      </div>
+    </a>
+    <a class="card" href="NO/">
+      <img src="img/NO.webp" alt="Norway viewer: IFS analysis, HRES and BRIS over Scandinavia" loading="lazy">
+      <div class="body">
+        <h3>Norway <span>NO</span></h3>
+        <p class="when">Week of 22–28 September 2026</p>
+        <p>MET Norway's BRIS 2.5 km model as shipped, run from IFS initial conditions at 00 and 12 UTC, against IFS analysis and HRES, with river flow and flooded area from CaMa-Flood 3′. Also in 3D: see Norway in 3D.</p>
+      </div>
+    </a>
+    <a class="card" href="NO3D/">
+      <img src="img/NO3D.webp" alt="Norway in 3D: the western fjords in relief with the BRIS forecast rain" loading="lazy">
+      <div class="body">
+        <h3>Norway in 3D <span>NO3D</span></h3>
+        <p class="when">Week of 22–28 September 2026</p>
+        <p>MET Norway's BRIS 2.5 km, on the fjords and fells in three dimensions: 3D cloud from the model humidity, rain and snow with the snow level from its own profiles, temperature or wind, isobars, wind trails, orbit a town, meteogram and text forecast.</p>
+      </div>
+    </a>
+    <a class="card" href="CA/">
+      <img src="img/CA.webp" alt="California viewer: ecLand at 10, 5 and 2.5 km during the January 2023 atmospheric rivers" loading="lazy">
+      <div class="body">
+        <h3>California <span>CA</span></h3>
+        <p class="when">Atmospheric rivers of 3–10 January 2023</p>
+        <p>ecLand at 10, 5 and 2.5 km forced by CONUS404-BA: rain, temperature and wind going in, Sierra snowpack and runoff coming out. Also in 3D: see California in 3D.</p>
+      </div>
+    </a>
+    <a class="card" href="CA3D/">
+      <img src="img/CA3D.webp" alt="California in 3D: the state in relief with the January 2023 atmospheric-river rain" loading="lazy">
+      <div class="body">
+        <h3>California in 3D <span>CA3D</span></h3>
+        <p class="when">Preview · reanalysis demo, forecasts to come</p>
+        <p>The 2.5 km CA-BRIS grid in three dimensions with the CONUS404 reanalysis of the 3–10 January 2023 atmospheric rivers (not a forecast), ready for the CA-BRIS forecasts, whose training data are being prepared.</p>
+      </div>
+    </a>
+    <a class="card" href="CONUS3D/">
+      <img src="img/CONUS3D.webp" alt="CONUS in 3D: the contiguous United States in relief with Hurricane Harvey's rain" loading="lazy">
+      <div class="body">
+        <h3>CONUS in 3D <span>CONUS3D</span></h3>
+        <p class="when">Preview · reanalysis demo, forecasts to come</p>
+        <p>The contiguous US on the CaMa-Flood 3′ cells in three dimensions, with CONUS404 blended with the IFS analysis through Hurricane Harvey, 24–31 August 2017 (not a forecast), with regions at about 1.3 km.</p>
+      </div>
+    </a>
+    <a class="card" href="CN3D/">
+      <img src="img/CN3D.webp" alt="China in 3D: East Asia in relief with the forecast cloud and rain" loading="lazy">
+      <div class="body">
+        <h3>China in 3D <span>CN3D</span></h3>
+        <p class="when">Demo · forecast from 15 November 2026 00 UTC</p>
+        <p>A new 6′ (0.1°) limited-area model over China and East Asia, warm-started from BRIS and trained on IFS 9 km analyses, run from today's analysis: 3D cloud, rain and snow from the Himalaya to Japan, isobars, temperature, wind trails, orbit any city and a text forecast. About 30 s per 72 h forecast on one GPU.</p>
+      </div>
+    </a>
+    <a class="card" href="Globe/">
+      <img src="img/Globe.webp" alt="AIFS Single on the globe: North Atlantic depressions with rain, cloud, isobars and wind trails" loading="lazy">
+      <div class="body">
+        <h3>AIFS on the globe <span>Globe</span></h3>
+        <p class="when">Prototype · AIFS Single, 10-day forecast</p>
+        <p>ECMWF's global AI forecast, built with Anemoi, on a 3D globe with the relief exaggerated: rain and snow, cloud, isobars and wind trails, temperature or wind speed, hour by hour to ten days, with a point forecast anywhere.</p>
+      </div>
+    </a>
+  </div>
+
+  <p class="tips">In the viewers: drag or scroll to move, space to play, the arrow keys step in time; choose the run, the field and up to four side-by-side panels at the top. In 3D: colour the landscape by rain, temperature or wind, switch the 3D cloud and isobars, find a town to fly there and circle it, and open a point forecast with a text summary; on phones the view opens clear, with a small toolbar. A WebGL2 browser is needed; a hard refresh picks up new data.</p>
+
+  <footer>IFS data © ECMWF, CC BY 4.0 · BRIS weights: MET Norway · CERRA: Copernicus C3S · CONUS404-BA: NCAR/USGS · Gianpaolo Balsamo, ECMWF</footer>
+</main>
+<script src="brand.js?v=202611060913" data-into="main" data-first defer></script>
+<script src="brand.js?v=202611060913" data-mode="footer" data-into="main" defer></script>
+</body>
+</html>
