@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found</title>
+<meta name="robots" content="noindex">
+<script>
+// old /FIAB/... links (the section was renamed ANEMOI): send them to Forecast-in-a-Box on GitHub
+if (/^\/FIAB(\/|$)/i.test(location.pathname)) location.replace("https://github.com/ecmwf/forecast-in-a-box");
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;margin:40px 16px;color:#1f2937;background:#fff">
+<h1 style="font-size:20px">Page not found</h1>
+<p>Try the <a href="/">home page</a> or the regional AI weather viewers at <a href="/ANEMOI/">/ANEMOI</a>.</p>
+</body>
+</html>
